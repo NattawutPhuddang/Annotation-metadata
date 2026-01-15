@@ -159,6 +159,27 @@ app.post('/api/save-file', (req, res) => {
         res.status(500).json({ error: 'Failed to save file' });
     }
 });
+// API: อ่านไฟล์ TSV
+app.get('/api/load-file', (req, res) => {
+    const { filename } = req.query;
+    if (!filename || typeof filename !== 'string') {
+        return res.status(400).json({ error: 'Filename required' });
+    }
+    try {
+        const filePath = path_1.default.join(__dirname, '..', filename);
+        // ตรวจสอบว่าไฟล์มีอยู่หรือไม่
+        if (!fs_1.default.existsSync(filePath)) {
+            return res.status(404).json({ error: 'File not found' });
+        }
+        const content = fs_1.default.readFileSync(filePath, 'utf-8');
+        res.setHeader('Content-Type', 'text/tab-separated-values');
+        res.send(content);
+    }
+    catch (error) {
+        console.error('Error loading file:', error);
+        res.status(500).json({ error: 'Failed to load file' });
+    }
+});
 app.listen(PORT, () => {
     console.log(`🚀 Backend server running on http://localhost:${PORT}`);
     console.log(`📁 Ready to scan audio files and serve them`);

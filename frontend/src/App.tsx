@@ -1,11 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './App.css';
 import { AudioItem } from './types';
 import UploadPage from './pages/UploadPage';
 import AnnotationPage from './pages/AnnotationPage';
 import CorrectPage from './pages/CorrectPage';
 import EditPage from './pages/EditPage';
-import { List, CheckCircle, AlertCircle, LogOut, Save } from 'lucide-react';
+import { List, CheckCircle, LogOut, Save } from 'lucide-react';
 
 // ลบ import TokenizeModal ออกไปแล้ว
 
@@ -13,16 +13,33 @@ type Tab = 'pending' | 'correct' | 'fail';
 
 const App: React.FC = () => {
   // --- State ---
-  const [hasStarted, setHasStarted] = useState<boolean>(false);
+  const [hasStarted, setHasStarted] = useState<boolean>(() => {
+    const saved = localStorage.getItem('hasStarted');
+    return saved ? JSON.parse(saved) : false;
+  });
   const [currentTab, setCurrentTab] = useState<Tab>('pending');
   
-  const [metadata, setMetadata] = useState<AudioItem[]>([]);
-  const [audioPath, setAudioPath] = useState<string>('');
+  const [metadata, setMetadata] = useState<AudioItem[]>(() => {
+    const saved = localStorage.getItem('metadata');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [audioPath, setAudioPath] = useState<string>(() => {
+    return localStorage.getItem('audioPath') || '';
+  });
   
   // Data Buckets
-  const [audioFiles, setAudioFiles] = useState<AudioItem[]>([]);
-  const [correctData, setCorrectData] = useState<AudioItem[]>([]);
-  const [incorrectData, setIncorrectData] = useState<AudioItem[]>([]);
+  const [audioFiles, setAudioFiles] = useState<AudioItem[]>(() => {
+    const saved = localStorage.getItem('audioFiles');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [correctData, setCorrectData] = useState<AudioItem[]>(() => {
+    const saved = localStorage.getItem('correctData');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [incorrectData, setIncorrectData] = useState<AudioItem[]>(() => {
+    const saved = localStorage.getItem('incorrectData');
+    return saved ? JSON.parse(saved) : [];
+  });
   
   // Status
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -31,6 +48,70 @@ const App: React.FC = () => {
   // Player
   const [playingFile, setPlayingFile] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // --- Effects: Save to localStorage ---
+  useEffect(() => {
+    localStorage.setItem('hasStarted', JSON.stringify(hasStarted));
+  }, [hasStarted]);
+
+  useEffect(() => {
+    localStorage.setItem('metadata', JSON.stringify(metadata));
+  }, [metadata]);
+
+  useEffect(() => {
+    localStorage.setItem('audioPath', audioPath);
+  }, [audioPath]);
+
+  useEffect(() => {
+    localStorage.setItem('audioFiles', JSON.stringify(audioFiles));
+  }, [audioFiles]);
+
+  useEffect(() => {
+    localStorage.setItem('correctData', JSON.stringify(correctData));
+  }, [correctData]);
+
+  useEffect(() => {
+    localStorage.setItem('incorrectData', JSON.stringify(incorrectData));
+  }, [incorrectData]);
+
+  // --- Effects: Load Correct.tsv and fail.tsv on startup ---
+  useEffect(() => {
+    const loadExistingData = async () => {
+      try {
+        // โหลด Correct.tsv
+        const correctResponse = await fetch('http://localhost:3001/api/load-file?filename=Correct.tsv');
+        if (correctResponse.ok) {
+          const text = await correctResponse.text();
+          const rows = text.split('\n').filter(row => row.trim());
+          const correctItems: AudioItem[] = rows.slice(1).map(row => {
+            const cols = row.split('\t');
+            return { filename: cols[0] || '', text: cols[1] || '' };
+          }).filter(item => item.filename);
+          if (correctItems.length > 0) {
+            setCorrectData(correctItems);
+          }
+        }
+        
+        // โหลด fail.tsv
+        const failResponse = await fetch('http://localhost:3001/api/load-file?filename=fail.tsv');
+        if (failResponse.ok) {
+          const text = await failResponse.text();
+          const rows = text.split('\n').filter(row => row.trim());
+          const failItems: AudioItem[] = rows.slice(1).map(row => {
+            const cols = row.split('\t');
+            return { filename: cols[0] || '', text: cols[1] || '' };
+          }).filter(item => item.filename);
+          if (failItems.length > 0) {
+            setIncorrectData(failItems);
+          }
+        }
+      } catch (error) {
+        console.log('No existing files found:', error);
+      }
+    };
+
+    loadExistingData();
+  }, []);
 
   // --- Logic Helpers ---
 
@@ -262,7 +343,13 @@ const App: React.FC = () => {
             <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--slate-200)' }}></div>
 
             <button 
-              onClick={() => { if(window.confirm('ต้องการกลับไปหน้าแรกหรือไม่?')) setHasStarted(false); }}
+              onClick={() => { 
+                if(window.confirm('ต้องการกลับไปหน้าแรกหรือไม่?')) {
+                  // เคลียร์เฉพาะ hasStarted แต่เก็บ metadata และ audioPath
+                  setHasStarted(false);
+                  setCurrentTab('pending');
+                }
+              }}
               className="btn-action hover:bg-rose-50 hover:text-rose-500"
               title="ออก / เริ่มใหม่"
             >
