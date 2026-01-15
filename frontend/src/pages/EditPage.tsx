@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Check, Download, Scissors, Play, Pause } from 'lucide-react';
+import { Check, Download, Play, Pause } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
 import { WaveformPlayer } from '../components/WaveformPlayer';
+import { TokenizedText } from '../components/TokenizedText';
 
 interface Props {
   data: AudioItem[];
@@ -18,10 +19,10 @@ const ITEMS_PER_PAGE = 10;
 const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAudio, playingFile, onInspectText }) => {
   const [page, setPage] = useState(1);
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [tokens, setTokens] = useState<Record<string, string[]>>({});
+  
   const items = data.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>, fn: string, val: string) => {
+  const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>, fn: string, val: string) => {
     if (e.key === 'F2' || (e.ctrlKey && e.key === 'b')) {
       e.preventDefault();
       const input = e.currentTarget;
@@ -31,15 +32,12 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
       if (sel) {
         const newVal = val.substring(0, s) + `(${sel},)` + val.substring(end);
         setEdits(prev => ({ ...prev, [fn]: newVal }));
-        setTimeout(() => { input.setSelectionRange(s + sel.length + 2, s + sel.length + 2); }, 0);
+        setTimeout(() => { 
+            input.focus();
+            input.setSelectionRange(s + sel.length + 2, s + sel.length + 2); 
+        }, 0);
       }
     }
-  };
-
-  const showTokens = async (fn: string, text: string) => {
-    if (tokens[fn]) { setTokens(prev => { const c = {...prev}; delete c[fn]; return c; }); return; }
-    const res = await onInspectText(text);
-    setTokens(prev => ({ ...prev, [fn]: res }));
   };
 
   if (data.length === 0) return (
@@ -68,8 +66,8 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
           <thead>
             <tr>
               <th className="w-16 text-center">No.</th>
-              <th className="w-[35%]">Audio Source</th>
-              <th>Correction</th>
+              <th className="w-[30%]">Audio Source</th>
+              <th>Correction & Tokens</th>
               <th className="w-20 text-center">Save</th>
             </tr>
           </thead>
@@ -82,8 +80,8 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
                   <td className="text-center align-middle">
                     <span className="text-xs font-mono text-slate-300">{(page-1)*ITEMS_PER_PAGE + idx + 1}</span>
                   </td>
-                  <td>
-                    <div className="flex flex-col gap-1">
+                  <td className="align-top pt-4">
+                    <div className="flex flex-col gap-2">
                        <div className="flex items-center justify-between">
                           <div className="text-xs text-slate-500 font-medium truncate" title={item.filename}>
                             {item.filename}
@@ -97,46 +95,48 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
                        </div>
                        
                        {item.audioPath ? (
-                          <WaveformPlayer
-                            audioUrl={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
-                            isPlaying={isPlaying}
-                            onPlayChange={(p: boolean) => { if (p !== isPlaying) playAudio(item); }}
-                            progressColor="#f43f5e" // Rose Color
-                          />
+                          <div className="bg-rose-50/30 rounded-lg p-2 border border-rose-100/50">
+                             <WaveformPlayer
+                               audioUrl={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                               isPlaying={isPlaying}
+                               onPlayChange={(p: boolean) => { if (p !== isPlaying) playAudio(item); }}
+                               progressColor="#f43f5e"
+                               height="h-3"
+                             />
+                          </div>
                        ) : <span className="text-xs text-rose-300">Audio missing</span>}
                     </div>
                   </td>
                   <td className="align-top pt-4">
-                    <div className="flex gap-2 mb-2">
-                      <input 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-200 transition-all font-mono text-sm"
+                    <div className="mb-4">
+                      <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block tracking-wider">Edit Text</label>
+                      
+                      {/* แก้ไขขนาด Textarea เป็น 530x45 ตามที่ต้องการ */}
+                      <textarea
+                        className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 transition-all font-mono text-base leading-relaxed"
+                        style={{ width: '530px', height: '45px', resize: 'none' }}
                         value={val}
                         onChange={e => setEdits(prev => ({...prev, [item.filename]: e.target.value}))}
                         onKeyDown={e => handleKey(e, item.filename, val)}
-                        placeholder="Type correction..."
+                        placeholder="Type correction here..."
+                        spellCheck={false}
                       />
-                      <button 
-                        onClick={()=>showTokens(item.filename, val)} 
-                        className={`btn-icon rounded-lg border border-slate-200 hover:border-indigo-300 hover:text-indigo-500 ${tokens[item.filename] ? 'bg-indigo-50 text-indigo-500 border-indigo-200' : 'bg-white text-slate-400'}`}
-                      >
-                        <Scissors size={18}/>
-                      </button>
                     </div>
                     
-                    {tokens[item.filename] && (
-                      <div className="flex flex-wrap gap-1.5 p-3 bg-indigo-50/50 rounded-lg border border-indigo-100/50">
-                        {tokens[item.filename].map((t,i) => (
-                          <span key={i} className="px-2 py-1 bg-white border border-indigo-100 rounded text-xs font-mono text-indigo-600">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <div>
+                         <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block tracking-wider">Inspect Tokens</label>
+                         <TokenizedText 
+                            text={val} 
+                            onInspect={onInspectText} 
+                            isExpanded={false}
+                         />
+                    </div>
                   </td>
                   <td className="text-center align-middle">
                     <button 
                       onClick={() => { onSaveCorrection(item, val); setEdits(p => { const c={...p}; delete c[item.filename]; return c; }); }} 
-                      className="btn-icon bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white"
+                      className="btn-icon bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white w-10 h-10 shadow-sm hover:shadow-md"
+                      title="Save Correction"
                     >
                       <Check size={20} strokeWidth={2.5}/>
                     </button>
