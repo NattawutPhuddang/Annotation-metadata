@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Download, Scissors } from 'lucide-react';
+import { Check, Download, Scissors, Play, Pause } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
 import { WaveformPlayer } from '../components/WaveformPlayer';
@@ -13,7 +13,7 @@ interface Props {
   onInspectText: (text: string) => Promise<string[]>;
 }
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAudio, playingFile, onInspectText }) => {
   const [page, setPage] = useState(1);
@@ -42,51 +42,104 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
     setTokens(prev => ({ ...prev, [fn]: res }));
   };
 
-  if (data.length === 0) return <div className="text-center p-10 text-slate-400">ไม่มีรายการแก้ไข</div>;
+  if (data.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-20 text-center text-slate-400">
+      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+        <Check size={32} className="text-slate-300"/>
+      </div>
+      No failed items to edit.
+    </div>
+  );
 
   return (
     <div className="animate-fade-in">
-      <div className="flex justify-between mb-4">
-        <h2 className="text-xl font-bold text-rose-600">Fail ({data.length})</h2>
-        <button onClick={() => onDownload(data, 'fail.tsv')} className="btn-primary bg-rose-500"><Download size={18} className="mr-2"/> Download</button>
+      <div className="flex justify-between items-center mb-6 px-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-danger">Needs Correction</h2>
+          <span className="px-2 py-1 bg-danger-bg text-danger text-xs font-bold rounded-full">{data.length}</span>
+        </div>
+        <button onClick={() => onDownload(data, 'fail.tsv')} className="btn-icon w-auto px-4 gap-2 text-sm bg-danger text-white hover:bg-rose-600 shadow-none">
+          <Download size={16}/> Download TSV
+        </button>
       </div>
-      <div className="card-content border-rose-100">
-        <table className="data-table w-full">
-          <thead><tr><th className="w-16">#</th><th>Audio</th><th>Edit Text</th><th className="w-20">Save</th></tr></thead>
+
+      <div className="minimal-card mb-8">
+        <table className="custom-table">
+          <thead>
+            <tr>
+              <th className="w-16 text-center">No.</th>
+              <th className="w-[35%]">Audio Source</th>
+              <th>Correction</th>
+              <th className="w-20 text-center">Save</th>
+            </tr>
+          </thead>
           <tbody>
             {items.map((item, idx) => {
               const val = edits[item.filename] ?? item.text;
+              const isPlaying = playingFile === item.filename;
               return (
-                <tr key={item.filename}>
-                  <td className="text-center text-slate-400 pt-4">{(page-1)*ITEMS_PER_PAGE + idx + 1}</td>
-                  <td className="p-2 align-top" style={{minWidth: '300px'}}>
-                    <div className="text-xs text-slate-400 font-mono mb-1">{item.filename}</div>
-                    {item.audioPath && (
-                      <WaveformPlayer 
-                        audioPath={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
-                        isPlaying={playingFile === item.filename}
-                        onPlayChange={(p) => { if (p !== (playingFile === item.filename)) playAudio(item); }}
-                      />
-                    )}
+                <tr key={item.filename} className="row-hover">
+                  <td className="text-center align-middle">
+                    <span className="text-xs font-mono text-slate-300">{(page-1)*ITEMS_PER_PAGE + idx + 1}</span>
                   </td>
-                  <td className="p-2">
-                    <div className="flex gap-2">
+                  <td>
+                    <div className="flex flex-col gap-1">
+                       <div className="flex items-center justify-between">
+                          <div className="text-xs text-slate-500 font-medium truncate" title={item.filename}>
+                            {item.filename}
+                          </div>
+                          <button 
+                            onClick={() => playAudio(item)}
+                            className={`btn-icon w-8 h-8 text-danger hover:bg-rose-50 ${isPlaying ? 'bg-rose-50' : ''}`}
+                          >
+                             {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5"/>}
+                          </button>
+                       </div>
+                       
+                       {item.audioPath ? (
+                          <WaveformPlayer
+                            audioUrl={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                            isPlaying={isPlaying}
+                            onPlayChange={(p: boolean) => { if (p !== isPlaying) playAudio(item); }}
+                            progressColor="#f43f5e" // Rose Color
+                          />
+                       ) : <span className="text-xs text-rose-300">Audio missing</span>}
+                    </div>
+                  </td>
+                  <td className="align-top pt-4">
+                    <div className="flex gap-2 mb-2">
                       <input 
-                        className="w-full border border-rose-200 rounded px-3 py-2 focus:ring-2 focus:ring-rose-200 outline-none"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-200 transition-all font-mono text-sm"
                         value={val}
                         onChange={e => setEdits(prev => ({...prev, [item.filename]: e.target.value}))}
                         onKeyDown={e => handleKey(e, item.filename, val)}
+                        placeholder="Type correction..."
                       />
-                      <button onClick={()=>showTokens(item.filename, val)} className="p-2 text-slate-400 hover:text-indigo-500 border rounded"><Scissors size={18}/></button>
+                      <button 
+                        onClick={()=>showTokens(item.filename, val)} 
+                        className={`btn-icon rounded-lg border border-slate-200 hover:border-indigo-300 hover:text-indigo-500 ${tokens[item.filename] ? 'bg-indigo-50 text-indigo-500 border-indigo-200' : 'bg-white text-slate-400'}`}
+                      >
+                        <Scissors size={18}/>
+                      </button>
                     </div>
+                    
                     {tokens[item.filename] && (
-                      <div className="flex flex-wrap gap-1 mt-2 p-2 bg-slate-50 rounded">
-                        {tokens[item.filename].map((t,i) => <span key={i} className="px-2 py-0.5 bg-white border rounded text-sm">{t}</span>)}
+                      <div className="flex flex-wrap gap-1.5 p-3 bg-indigo-50/50 rounded-lg border border-indigo-100/50">
+                        {tokens[item.filename].map((t,i) => (
+                          <span key={i} className="px-2 py-1 bg-white border border-indigo-100 rounded text-xs font-mono text-indigo-600">
+                            {t}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </td>
-                  <td className="text-center align-top pt-2">
-                    <button onClick={() => { onSaveCorrection(item, val); setEdits(p => { const c={...p}; delete c[item.filename]; return c; }); }} className="btn-action bg-indigo-50 text-indigo-600"><Check/></button>
+                  <td className="text-center align-middle">
+                    <button 
+                      onClick={() => { onSaveCorrection(item, val); setEdits(p => { const c={...p}; delete c[item.filename]; return c; }); }} 
+                      className="btn-icon bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white"
+                    >
+                      <Check size={20} strokeWidth={2.5}/>
+                    </button>
                   </td>
                 </tr>
               );
@@ -94,7 +147,9 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
           </tbody>
         </table>
       </div>
-      <Pagination currentPage={page} totalPages={Math.ceil(data.length/ITEMS_PER_PAGE)} onPageChange={setPage} />
+      <div className="flex justify-center pb-10">
+        <Pagination currentPage={page} totalPages={Math.ceil(data.length/ITEMS_PER_PAGE)} onPageChange={setPage} />
+      </div>
     </div>
   );
 };
