@@ -186,9 +186,10 @@ app.post('/api/tokenize', (req: Request, res: Response) => {
   // Escape double quotes เพื่อป้องกัน command line error
   const safeText = text.replace(/"/g, '\\"');
   
-  // Path ไปยังไฟล์ python (Windows อาจต้องแก้คำสั่ง python เป็น python3 หรือ path เต็ม ถ้าไม่ work)
-  const scriptPath = path.join(__dirname, 'tokenizer.py');
-  const command = `python "${scriptPath}" "${safeText}"`;
+  // Path ไปยังไฟล์ python (ใช้ venv python เพื่อให้เข้าถึง pythainlp)
+  const scriptPath = path.join(__dirname, '..', 'src', 'tokenizer.py');
+  const pythonPath = path.join(__dirname, '..', '..', '.venv', 'Scripts', 'python.exe');
+  const command = `"${pythonPath}" "${scriptPath}" "${safeText}"`;
 
   exec(command, (error, stdout, stderr) => {
     if (error) {
