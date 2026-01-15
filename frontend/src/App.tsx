@@ -1,160 +1,119 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import './App.css';
 import { AudioItem } from './types';
 import UploadPage from './pages/UploadPage';
 import AnnotationPage from './pages/AnnotationPage';
 import CorrectPage from './pages/CorrectPage';
 import EditPage from './pages/EditPage';
-import { List, CheckCircle, LogOut, Save } from 'lucide-react';
-
-// ลบ import TokenizeModal ออกไปแล้ว
+import { List, LogOut, Save } from 'lucide-react'; // ลบ CheckCircle ออก
 
 type Tab = 'pending' | 'correct' | 'fail';
 
 const App: React.FC = () => {
   // --- State ---
-  const [hasStarted, setHasStarted] = useState<boolean>(() => {
-    const saved = localStorage.getItem('hasStarted');
-    return saved ? JSON.parse(saved) : false;
-  });
+  const [hasStarted, setHasStarted] = useState<boolean>(() => JSON.parse(localStorage.getItem('hasStarted') || 'false'));
   const [currentTab, setCurrentTab] = useState<Tab>('pending');
   
-  const [metadata, setMetadata] = useState<AudioItem[]>(() => {
-    const saved = localStorage.getItem('metadata');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [audioPath, setAudioPath] = useState<string>(() => {
-    return localStorage.getItem('audioPath') || '';
-  });
+  const [metadata, setMetadata] = useState<AudioItem[]>(() => JSON.parse(localStorage.getItem('metadata') || '[]'));
+  const [audioPath, setAudioPath] = useState<string>(() => localStorage.getItem('audioPath') || '');
   
-  // Data Buckets
-  const [audioFiles, setAudioFiles] = useState<AudioItem[]>(() => {
-    const saved = localStorage.getItem('audioFiles');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [correctData, setCorrectData] = useState<AudioItem[]>(() => {
-    const saved = localStorage.getItem('correctData');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [incorrectData, setIncorrectData] = useState<AudioItem[]>(() => {
-    const saved = localStorage.getItem('incorrectData');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [audioFiles, setAudioFiles] = useState<AudioItem[]>(() => JSON.parse(localStorage.getItem('audioFiles') || '[]'));
+  const [correctData, setCorrectData] = useState<AudioItem[]>(() => JSON.parse(localStorage.getItem('correctData') || '[]'));
+  const [incorrectData, setIncorrectData] = useState<AudioItem[]>(() => JSON.parse(localStorage.getItem('incorrectData') || '[]'));
   
-  // Status
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  // ใช้ setChanges เพื่อเก็บประวัติการแก้คำผิด
+  const [changes, setChanges] = useState<Array<{original: string, changed: string}>>(() => JSON.parse(localStorage.getItem('changes') || '[]'));
+  
   const [isSaving, setIsSaving] = useState<boolean>(false);
-
-  // Player
   const [playingFile, setPlayingFile] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
 
   // --- Effects: Save to localStorage ---
-  useEffect(() => {
-    localStorage.setItem('hasStarted', JSON.stringify(hasStarted));
-  }, [hasStarted]);
+  useEffect(() => { localStorage.setItem('hasStarted', JSON.stringify(hasStarted)); }, [hasStarted]);
+  useEffect(() => { localStorage.setItem('metadata', JSON.stringify(metadata)); }, [metadata]);
+  useEffect(() => { localStorage.setItem('audioPath', audioPath); }, [audioPath]);
+  useEffect(() => { localStorage.setItem('audioFiles', JSON.stringify(audioFiles)); }, [audioFiles]);
+  useEffect(() => { localStorage.setItem('correctData', JSON.stringify(correctData)); }, [correctData]);
+  useEffect(() => { localStorage.setItem('incorrectData', JSON.stringify(incorrectData)); }, [incorrectData]);
+  useEffect(() => { localStorage.setItem('changes', JSON.stringify(changes)); }, [changes]);
 
+  // Load Initial Data from Backend
   useEffect(() => {
-    localStorage.setItem('metadata', JSON.stringify(metadata));
-  }, [metadata]);
-
-  useEffect(() => {
-    localStorage.setItem('audioPath', audioPath);
-  }, [audioPath]);
-
-  useEffect(() => {
-    localStorage.setItem('audioFiles', JSON.stringify(audioFiles));
-  }, [audioFiles]);
-
-  useEffect(() => {
-    localStorage.setItem('correctData', JSON.stringify(correctData));
-  }, [correctData]);
-
-  useEffect(() => {
-    localStorage.setItem('incorrectData', JSON.stringify(incorrectData));
-  }, [incorrectData]);
-
-  // --- Effects: Load Correct.tsv and fail.tsv on startup ---
-  useEffect(() => {
-    const loadExistingData = async () => {
+    const loadData = async () => {
       try {
-        // โหลด Correct.tsv
-        const correctResponse = await fetch('http://localhost:3001/api/load-file?filename=Correct.tsv');
-        if (correctResponse.ok) {
-          const text = await correctResponse.text();
-          const rows = text.split('\n').filter(row => row.trim());
-          const correctItems: AudioItem[] = rows.slice(1).map(row => {
-            const cols = row.split('\t');
-            return { filename: cols[0] || '', text: cols[1] || '' };
-          }).filter(item => item.filename);
-          if (correctItems.length > 0) {
-            setCorrectData(correctItems);
-          }
-        }
-        
-        // โหลด fail.tsv
-        const failResponse = await fetch('http://localhost:3001/api/load-file?filename=fail.tsv');
-        if (failResponse.ok) {
-          const text = await failResponse.text();
-          const rows = text.split('\n').filter(row => row.trim());
-          const failItems: AudioItem[] = rows.slice(1).map(row => {
-            const cols = row.split('\t');
-            return { filename: cols[0] || '', text: cols[1] || '' };
-          }).filter(item => item.filename);
-          if (failItems.length > 0) {
-            setIncorrectData(failItems);
-          }
-        }
-      } catch (error) {
-        console.log('No existing files found:', error);
-      }
-    };
+        const load = async (fname: string) => {
+           const res = await fetch(`http://localhost:3001/api/load-file?filename=${fname}`);
+           if (!res.ok) return [];
+           const text = await res.text();
+           return text.split('\n').slice(1).map(r => {
+             const [f, t] = r.split('\t');
+             return (f && t) ? { filename: f, text: t } : null;
+           }).filter(Boolean) as AudioItem[];
+        };
 
-    loadExistingData();
+        const c = await load('Correct.tsv');
+        if (c.length) setCorrectData(c);
+        
+        const f = await load('fail.tsv');
+        if (f.length) setIncorrectData(f);
+
+        // Load Changes
+        const chRes = await fetch('http://localhost:3001/api/load-file?filename=ListOfChange.tsv');
+        if (chRes.ok) {
+           const txt = await chRes.text();
+           const chList = txt.split('\n').slice(1).map(r => {
+             const [o, n] = r.split('\t');
+             return (o && n) ? { original: o, changed: n } : null;
+           }).filter(Boolean) as Array<{original: string, changed: string}>;
+           if (chList.length) setChanges(chList);
+        }
+      } catch (e) { console.error(e); }
+    };
+    loadData();
   }, []);
 
-  // --- Logic Helpers ---
+  // --- Helpers ---
+  const fileMap = useMemo(() => {
+    const map = new Map<string, string>();
+    audioFiles.forEach(f => { if(f.audioPath) map.set(f.filename, f.audioPath); });
+    return map;
+  }, [audioFiles]);
 
-  const generateTSV = (data: AudioItem[]) => {
-    return 'filename\ttext\n' + data.map(i => `${i.filename}\t${i.text}`).join('\n');
-  };
+  const enrich = (items: AudioItem[]) => items.map(i => ({
+    ...i, audioPath: i.audioPath || fileMap.get(i.filename)
+  }));
 
   const saveToBackend = async (filename: string, data: AudioItem[]) => {
-    try {
-      setIsSaving(true);
-      const content = generateTSV(data);
-      await fetch('http://localhost:3001/api/save-file', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, content }),
-      });
-      setLastSaved(new Date());
-    } catch (err) {
-      console.error(`Failed to auto-save ${filename}`, err);
-    } finally {
-      setIsSaving(false);
-    }
+    setIsSaving(true);
+    const content = 'filename\ttext\n' + data.map(i => `${i.filename}\t${i.text}`).join('\n');
+    await fetch('http://localhost:3001/api/save-file', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ filename, content })
+    });
+    setIsSaving(false);
+  };
+  
+  const saveChangesToBackend = async (newChanges: Array<{original: string, changed: string}>) => {
+    const content = 'Wrong Word\tCorrect Word\n' + newChanges.map(c => `${c.original}\t${c.changed}`).join('\n');
+    await fetch('http://localhost:3001/api/save-file', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ filename: 'ListOfChange.tsv', content })
+    });
   };
 
-  const performAutoSave = (newCorrect: AudioItem[], newIncorrect: AudioItem[]) => {
-    saveToBackend('Correct.tsv', newCorrect);
-    saveToBackend('fail.tsv', newIncorrect);
+  const performAutoSave = (newC: AudioItem[], newF: AudioItem[]) => {
+    saveToBackend('Correct.tsv', newC);
+    saveToBackend('fail.tsv', newF);
   };
 
-  const pendingItems = audioFiles.filter(item => 
-    !correctData.some(c => c.filename === item.filename) &&
-    !incorrectData.some(i => i.filename === item.filename)
-  );
-
-  // --- Handlers ---
-
-  const handleTSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // --- Handlers (Full Logic) ---
+  
+  // 1. Upload Metadata (TSV)
+  const handleMetadataUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        if (!event.target) return;
-        const text = event.target.result as string;
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
         const rows = text.split('\n').filter(row => row.trim());
         const parsed: AudioItem[] = rows.slice(1).map(row => {
           const cols = row.split('\t');
@@ -166,15 +125,15 @@ const App: React.FC = () => {
     }
   };
 
-  const scanAudioFiles = async () => {
+  // 2. Scan Audio Files
+  const handleScan = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/scan-audio`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch(`http://localhost:3001/api/scan-audio`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ path: audioPath }),
       });
-      if (!response.ok) throw new Error('Scan failed');
-      const list: string[] = await response.json();
+      if (!res.ok) throw new Error('Scan failed');
+      const list: string[] = await res.json();
       
       const matched: AudioItem[] = list.map(path => {
         const name = path.split(/[/\\]/).pop() || '';
@@ -194,204 +153,110 @@ const App: React.FC = () => {
     }
   };
 
+  // 3. Play Audio
   const playAudio = (item: AudioItem) => {
-    if (!audioRef.current || !item.audioPath) return;
-    const url = `http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`;
-    
-    if (playingFile === item.filename) {
-      audioRef.current.pause();
-      setPlayingFile(null);
-    } else {
-      audioRef.current.src = url;
-      audioRef.current.play().catch(console.error);
-      setPlayingFile(item.filename);
-    }
+    setPlayingFile(current => current === item.filename ? null : item.filename);
   };
 
+  // 4. Decision (Check/Cross)
+  const handleDecision = (item: AudioItem, status: 'correct' | 'incorrect') => {
+    const newC = status === 'correct' ? [...correctData, item] : correctData;
+    const newF = status === 'incorrect' ? [...incorrectData, item] : incorrectData;
+    if (status === 'correct') setCorrectData(newC); else setIncorrectData(newF);
+    performAutoSave(newC, newF);
+  };
+
+  // 5. Save Correction (Edit Page)
+  const handleSaveCorrection = (item: AudioItem, newText: string) => {
+    // หาคำผิดในวงเล็บ (ผิด,ถูก)
+    const bracketRegex = /\(([^,]+),([^)]+)\)/g;
+    let editedPairs: Array<{original: string, changed: string}> = [];
+    let match;
+    while ((match = bracketRegex.exec(newText)) !== null) {
+      editedPairs.push({ original: match[1], changed: match[2] });
+    }
+    
+    const cleanedText = newText.replace(/\([^)]+\)/g, '');
+    const newItem = { ...item, text: cleanedText };
+    
+    // ย้ายจาก Fail -> Correct
+    const newF = incorrectData.filter(i => i.filename !== item.filename);
+    const newC = [...correctData, newItem];
+    
+    setIncorrectData(newF);
+    setCorrectData(newC);
+    
+    if (editedPairs.length > 0) {
+      const newChanges = [...changes, ...editedPairs];
+      setChanges(newChanges);
+      saveChangesToBackend(newChanges);
+    }
+    performAutoSave(newC, newF);
+  };
+
+  // 6. Inspect Text
+  const handleInspectText = async (text: string): Promise<string[]> => {
+    try {
+      const res = await fetch('http://localhost:3001/api/tokenize', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ text })
+      });
+      return await res.json();
+    } catch { return []; }
+  };
+  
+  // 7. Download
   const downloadTSV = (data: AudioItem[], filename: string) => {
-    const content = generateTSV(data);
+    const content = 'filename\ttext\n' + data.map(i => `${i.filename}\t${i.text}`).join('\n');
     const blob = new Blob([content], { type: 'text/tab-separated-values' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
+    a.href = url; a.download = filename; a.click();
   };
 
-  // --- Inspect Text Function (FIXED TYPE) ---
-  // แก้ไขให้คืนค่า Promise<string[]> เพื่อให้ตรงกับที่หน้าอื่นๆ ต้องการ
-  const handleInspectText = async (text: string): Promise<string[]> => {
-    try {
-      const response = await fetch('http://localhost:3001/api/tokenize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      const data = await response.json();
-      // ตรวจสอบว่าได้ array จริงไหม ถ้าใช่ส่งกลับ ถ้าไม่ใช่ส่ง array ว่าง
-      return Array.isArray(data) ? data : [];
-    } catch (error) {
-      console.error('Tokenize error', error);
-      return [];
-    }
-  };
-
-  // --- Actions ---
-
-  const handleDecision = (item: AudioItem, status: 'correct' | 'incorrect') => {
-    let newCorrect = correctData;
-    let newIncorrect = incorrectData;
-
-    if (status === 'correct') {
-      newCorrect = [...correctData, item];
-      setCorrectData(newCorrect);
-    } else {
-      newIncorrect = [...incorrectData, item];
-      setIncorrectData(newIncorrect);
-    }
-    performAutoSave(newCorrect, newIncorrect);
-  };
-
-  const handleMoveToFail = (item: AudioItem) => {
-    const newCorrect = correctData.filter(i => i.filename !== item.filename);
-    const newIncorrect = [...incorrectData, item];
-    setCorrectData(newCorrect);
-    setIncorrectData(newIncorrect);
-    performAutoSave(newCorrect, newIncorrect);
-  };
-
-  const handleSaveCorrection = (item: AudioItem, newText: string) => {
-    const newItem = { ...item, text: newText };
-    const newIncorrect = incorrectData.filter(i => i.filename !== item.filename);
-    const newCorrect = [...correctData, newItem];
-    setIncorrectData(newIncorrect);
-    setCorrectData(newCorrect);
-    performAutoSave(newCorrect, newIncorrect);
-  };
-
-  // --- Render ---
+  // --- Data Prep ---
+  const pendingItems = enrich(audioFiles.filter(i => 
+    !correctData.some(c => c.filename === i.filename) && !incorrectData.some(f => f.filename === i.filename)
+  ));
+  const correctItems = enrich(correctData);
+  const incorrectItems = enrich(incorrectData);
 
   if (!hasStarted) {
-    return (
-      <UploadPage
-        metadata={metadata}
-        audioPath={audioPath}
-        setAudioPath={setAudioPath}
-        onMetadataUpload={handleTSVUpload}
-        onScan={scanAudioFiles}
-      />
-    );
+    return <UploadPage metadata={metadata} audioPath={audioPath} setAudioPath={setAudioPath} 
+      onMetadataUpload={handleMetadataUpload} 
+      onScan={handleScan} />;
   }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      <audio ref={audioRef} onEnded={() => setPlayingFile(null)} className="hidden" />
-      
-      {/* Navbar */}
-      <div className="nav-container">
-        <div className="nav-content">
-          <div className="nav-logo">
-            <div className="logo-icon">
-              <List size={20} strokeWidth={3} />
-            </div>
-            <span>Audio<span style={{color: 'var(--primary-color)'}}>Annotator</span></span>
-          </div>
-
-          <div className="nav-tabs-container">
-            <button
-              onClick={() => setCurrentTab('pending')}
-              className={`nav-tab tab-pending ${currentTab === 'pending' ? 'active' : ''}`}
-            >
-              <span>รอตรวจสอบ</span>
-              <span className="tab-badge">{pendingItems.length}</span>
-            </button>
-            
-            <button
-              onClick={() => setCurrentTab('correct')}
-              className={`nav-tab tab-correct ${currentTab === 'correct' ? 'active' : ''}`}
-            >
-              <span>ถูกต้อง</span>
-              <span className="tab-badge">{correctData.length}</span>
-            </button>
-            
-            <button
-              onClick={() => setCurrentTab('fail')}
-              className={`nav-tab tab-fail ${currentTab === 'fail' ? 'active' : ''}`}
-            >
-              <span>แก้ไข</span>
-              <span className="tab-badge">{incorrectData.length}</span>
-            </button>
-          </div>
-
-          <div className="nav-actions">
-            {(isSaving || lastSaved) && (
-              <div className="status-indicator">
-                {isSaving ? (
-                  <>
-                    <Save size={14} className="animate-spin text-indigo-500" />
-                    <span className="text-indigo-500">Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle size={14} className="text-emerald-500" />
-                    <span className="text-slate-500">Saved</span>
-                  </>
-                )}
-              </div>
-            )}
-
-            <div style={{ width: '1px', height: '24px', backgroundColor: 'var(--slate-200)' }}></div>
-
-            <button 
-              onClick={() => { 
-                if(window.confirm('ต้องการกลับไปหน้าแรกหรือไม่?')) {
-                  // เคลียร์เฉพาะ hasStarted แต่เก็บ metadata และ audioPath
-                  setHasStarted(false);
-                  setCurrentTab('pending');
-                }
-              }}
-              className="btn-action hover:bg-rose-50 hover:text-rose-500"
-              title="ออก / เริ่มใหม่"
-            >
-              <LogOut size={18} />
-            </button>
-          </div>
+      <div className="bg-white border-b px-6 py-3 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+        <div className="font-bold text-lg flex gap-2 items-center">
+          <List className="text-indigo-600" /> AudioAnnotator
+        </div>
+        <div className="flex bg-slate-100 p-1 rounded-lg">
+           {(['pending', 'correct', 'fail'] as Tab[]).map(t => (
+             <button key={t} onClick={() => setCurrentTab(t)} 
+               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${currentTab === t ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>
+               {t.charAt(0).toUpperCase() + t.slice(1)} ({t === 'pending' ? pendingItems.length : t === 'correct' ? correctItems.length : incorrectItems.length})
+             </button>
+           ))}
+        </div>
+        <div className="flex items-center gap-3">
+           {isSaving && <span className="text-xs text-indigo-500 flex gap-1"><Save size={14} className="animate-spin"/> Saving...</span>}
+           <button onClick={() => setHasStarted(false)} className="p-2 hover:bg-red-50 text-red-500 rounded-full"><LogOut size={18}/></button>
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="flex-1 container mx-auto p-6 max-w-6xl">
-        {currentTab === 'pending' && (
-          <AnnotationPage
-            pendingItems={pendingItems}
-            onDecision={handleDecision}
-            playAudio={playAudio}
-            playingFile={playingFile}
-            onInspectText={handleInspectText} 
-          />
-        )}
-
-        {currentTab === 'correct' && (
-          <CorrectPage
-            data={correctData}
-            onMoveToFail={handleMoveToFail}
-            onDownload={downloadTSV}
-            playAudio={playAudio}
-            playingFile={playingFile}
-            onInspectText={handleInspectText}
-          />
-        )}
-
-        {currentTab === 'fail' && (
-          <EditPage
-            data={incorrectData}
-            onSaveCorrection={handleSaveCorrection}
-            onDownload={downloadTSV}
-            playAudio={playAudio}
-            playingFile={playingFile}
-            onInspectText={handleInspectText}
-          />
-        )}
+        {currentTab === 'pending' && 
+          <AnnotationPage pendingItems={pendingItems} onDecision={handleDecision} playAudio={playAudio} playingFile={playingFile} onInspectText={handleInspectText} />
+        }
+        {currentTab === 'correct' && 
+          <CorrectPage data={correctItems} onMoveToFail={(item)=>{handleDecision(item, 'incorrect')}} onDownload={downloadTSV} playAudio={playAudio} playingFile={playingFile} onInspectText={handleInspectText} />
+        }
+        {currentTab === 'fail' && 
+          <EditPage data={incorrectItems} onSaveCorrection={handleSaveCorrection} onDownload={downloadTSV} playAudio={playAudio} playingFile={playingFile} onInspectText={handleInspectText} />
+        }
       </div>
     </div>
   );

@@ -1,99 +1,97 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, Check, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
-import { TokenizedText } from '../components/TokenizedText'; // Import ใหม่
+import { TokenizedText } from '../components/TokenizedText';
+import { WaveformPlayer } from '../components/WaveformPlayer'; // นี่คือตัวใหม่ที่เราแก้เป็น AudioPlayer แล้ว
 
 interface AnnotationPageProps {
   pendingItems: AudioItem[];
   onDecision: (item: AudioItem, status: 'correct' | 'incorrect') => void;
   playAudio: (item: AudioItem) => void;
   playingFile: string | null;
-  onInspectText: (text: string) => Promise<string[]>; // แก้ Type เป็น Promise
+  onInspectText: (text: string) => Promise<string[]>;
 }
 
 const ITEMS_PER_PAGE = 15;
 
 const AnnotationPage: React.FC<AnnotationPageProps> = ({
-  pendingItems,
-  onDecision,
-  playAudio,
-  playingFile,
-  onInspectText
+  pendingItems, onDecision, playAudio, playingFile, onInspectText
 }) => {
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const totalPages = Math.ceil(pendingItems.length / ITEMS_PER_PAGE);
-  const safePage = Math.min(currentPage, Math.max(1, totalPages));
+  const [currentPage, setCurrentPage] = useState(1);
+  const currentItems = pendingItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const firstItem = currentItems[0];
 
+  // Keyboard Shortcuts
   useEffect(() => {
-    if (currentPage > totalPages && totalPages > 0) setCurrentPage(totalPages);
-  }, [pendingItems.length, totalPages, currentPage]);
+    const handleKeys = (e: KeyboardEvent) => {
+      if (!firstItem) return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        playAudio(firstItem);
+      } else if (e.code === 'Enter') {
+        e.preventDefault();
+        onDecision(firstItem, 'correct');
+      } else if (e.code === 'Backspace') {
+        e.preventDefault();
+        onDecision(firstItem, 'incorrect');
+      }
+    };
+    window.addEventListener('keydown', handleKeys);
+    return () => window.removeEventListener('keydown', handleKeys);
+  }, [firstItem, playAudio, onDecision]);
 
-  const currentItems = pendingItems.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE);
-
-  if (pendingItems.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-        <Check size={48} className="mb-4 text-emerald-300" />
-        <p className="text-lg font-medium text-slate-600">ตรวจสอบครบทุกรายการแล้ว!</p>
-      </div>
-    );
-  }
+  if (pendingItems.length === 0) return <div className="text-center p-10 text-slate-400">หมดแล้วครับ!</div>;
 
   return (
     <div className="animate-fade-in">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-slate-700 flex items-center gap-2">
-          <span className="w-2 h-8 bg-indigo-400 rounded-full"></span>
-          รอตรวจสอบ ({pendingItems.length})
-        </h2>
-      </div>
-
       <div className="card-content">
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="text-center w-16">#</th>
-                <th>ชื่อไฟล์</th>
-                <th className="text-center w-20">เสียง</th>
-                <th>ข้อความ (คลิกเพื่อดูคำ)</th>
-                <th className="text-center w-40">ตรวจสอบ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentItems.map((item, idx) => {
-                const globalIdx = (safePage - 1) * ITEMS_PER_PAGE + idx;
-                const isPlaying = playingFile === item.filename;
-                return (
-                  <tr key={item.filename}>
-                    <td className="text-center text-slate-400">{globalIdx + 1}</td>
-                    <td className="text-mono text-sm">{item.filename}</td>
-                    <td className="text-center">
-                      <div className="flex-center">
-                        <button onClick={() => playAudio(item)} className={`btn-play ${isPlaying ? 'active' : ''}`}>
-                          {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
-                        </button>
+        <table className="data-table w-full">
+          <thead>
+            <tr className="text-left text-slate-500 border-b">
+              <th className="p-3 w-16 text-center">#</th>
+              <th className="p-3">Audio</th>
+              <th className="p-3">Text</th>
+              <th className="p-3 w-32 text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {currentItems.map((item, idx) => {
+               const isPlaying = playingFile === item.filename;
+               return (
+                 <tr key={item.filename} className="border-b hover:bg-slate-50">
+                   <td className="p-3 text-center text-slate-400">{(currentPage-1)*ITEMS_PER_PAGE + idx + 1}</td>
+                   <td className="p-3" style={{minWidth: '350px'}}>
+                     <div className="mb-1 text-xs text-slate-400 font-mono">{item.filename}</div>
+                     {item.audioPath ? (
+                       <WaveformPlayer 
+                         audioPath={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                         isPlaying={isPlaying}
+                         onPlayChange={(playing) => {
+                            // Logic: ถ้า Player บอกว่าเล่น แต่ State ยังไม่เล่น -> สั่งเล่น
+                            // ถ้า Player บอกหยุด -> สั่งหยุด
+                            if (playing && !isPlaying) playAudio(item);
+                            if (!playing && isPlaying) playAudio(item);
+                         }}
+                       />
+                     ) : <span className="text-red-400 text-sm">File not found</span>}
+                   </td>
+                   <td className="p-3 align-top pt-5">
+                      <TokenizedText text={item.text} onInspect={onInspectText} isExpanded={idx===0}/>
+                   </td>
+                   <td className="p-3 text-center align-middle">
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => onDecision(item, 'correct')} className="p-2 bg-emerald-100 text-emerald-600 rounded hover:bg-emerald-200"><Check size={18}/></button>
+                        <button onClick={() => onDecision(item, 'incorrect')} className="p-2 bg-rose-100 text-rose-600 rounded hover:bg-rose-200"><X size={18}/></button>
                       </div>
-                    </td>
-                    <td className="align-top pt-4"> 
-                      {/* ใช้ Component ใหม่ตรงนี้ */}
-                      <TokenizedText text={item.text} onInspect={onInspectText} />
-                    </td>
-                    <td className="text-center align-top pt-4">
-                      <div className="flex-center">
-                        <button onClick={() => onDecision(item, 'correct')} className="btn-action btn-check"><Check size={20} /></button>
-                        <button onClick={() => onDecision(item, 'incorrect')} className="btn-action btn-cross"><X size={20} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                   </td>
+                 </tr>
+               );
+            })}
+          </tbody>
+        </table>
       </div>
-      <Pagination currentPage={safePage} totalPages={totalPages} onPageChange={setCurrentPage} />
+      <Pagination currentPage={currentPage} totalPages={Math.ceil(pendingItems.length / ITEMS_PER_PAGE)} onPageChange={setCurrentPage} />
     </div>
   );
 };

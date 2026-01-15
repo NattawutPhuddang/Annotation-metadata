@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Play, Pause, Check, Download, Search, Scissors, Loader2 } from 'lucide-react';
+import { Check, Download, Search, Scissors, Loader2 } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
+import { WaveformPlayer } from '../components/WaveformPlayer';
 
 interface EditPageProps {
   data: AudioItem[];
@@ -19,8 +20,8 @@ const EditPage: React.FC<EditPageProps> = ({
 }) => {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [editingText, setEditingText] = useState<{ [key: string]: string }>({});
+  const [activeInputRef, setActiveInputRef] = useState<HTMLInputElement | null>(null);
   
-  // State สำหรับเก็บ tokens ของแต่ละแถว (ใช้ filename เป็น key)
   const [rowTokens, setRowTokens] = useState<{ [key: string]: string[] | null }>({});
   const [loadingRows, setLoadingRows] = useState<{ [key: string]: boolean }>({});
 
@@ -30,7 +31,6 @@ const EditPage: React.FC<EditPageProps> = ({
 
   const handleTextChange = (filename: string, text: string) => {
     setEditingText(prev => ({ ...prev, [filename]: text }));
-    // เมื่อแก้ข้อความ ให้ลบ tokens เก่าออก เพื่อให้ user ต้องกด inspect ใหม่
     setRowTokens(prev => {
       const copy = { ...prev };
       delete copy[filename];
@@ -39,7 +39,6 @@ const EditPage: React.FC<EditPageProps> = ({
   };
 
   const handleInspectRow = async (filename: string, text: string) => {
-    // Toggle ปิดถ้าเปิดอยู่
     if (rowTokens[filename]) {
       setRowTokens(prev => {
         const copy = { ...prev };
@@ -64,6 +63,37 @@ const EditPage: React.FC<EditPageProps> = ({
     onSaveCorrection(item, newText);
     setEditingText(prev => { const c = {...prev}; delete c[item.filename]; return c; });
     setRowTokens(prev => { const c = {...prev}; delete c[item.filename]; return c; });
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, filename: string) => {
+    if (e.key === 'F2' || (e.ctrlKey && e.key === 'b')) {
+      e.preventDefault();
+      const input = e.currentTarget;
+      const start = input.selectionStart || 0;
+      const end = input.selectionEnd || 0;
+      const selectedText = input.value.substring(start, end);
+      
+      if (selectedText) {
+        const beforeSelection = input.value.substring(0, start);
+        const afterSelection = input.value.substring(end);
+        const newValue = `${beforeSelection}(${selectedText},)${afterSelection}`;
+        
+        setEditingText(prev => ({ ...prev, [filename]: newValue }));
+        setRowTokens(prev => {
+          const copy = { ...prev };
+          delete copy[filename];
+          return copy;
+        });
+        
+        setTimeout(() => {
+          input.value = newValue;
+          const newCursorPos = start + selectedText.length + 2; 
+          input.selectionStart = newCursorPos;
+          input.selectionEnd = newCursorPos;
+          input.focus();
+        }, 0);
+      }
+    }
   };
 
   if (data.length === 0) {
@@ -111,12 +141,21 @@ const EditPage: React.FC<EditPageProps> = ({
                   <tr key={item.filename}>
                     <td className="text-center text-slate-400 align-top pt-5">{globalIdx + 1}</td>
                     <td className="text-mono text-sm align-top pt-5">{item.filename}</td>
-                    <td className="text-center align-top pt-4">
-                      <div className="flex-center">
-                        <button onClick={() => playAudio(item)} className={`btn-play ${isPlaying ? 'active' : ''}`} style={{ backgroundColor: isPlaying ? 'var(--danger-color)' : 'var(--danger-bg)', color: isPlaying ? 'white' : 'var(--danger-color)' }}>
-                          {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
-                        </button>
-                      </div>
+                    <td className="align-top pt-3" style={{ minWidth: '300px' }}>
+                      {/* ใช้ WaveformPlayer ทุกแถว */}
+                      {item.audioPath && (
+                        <WaveformPlayer 
+                          audioPath={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                          isPlaying={isPlaying}
+                          onPlayChange={(playing) => {
+                            if (playing) {
+                              if (!isPlaying) playAudio(item);
+                            } else {
+                              if (isPlaying) playAudio(item);
+                            }
+                          }}
+                        />
+                      )}
                     </td>
                     <td className="pt-3 pb-3">
                       <div className="flex gap-2 mb-2">
@@ -124,8 +163,11 @@ const EditPage: React.FC<EditPageProps> = ({
                           type="text"
                           value={val}
                           onChange={(e) => handleTextChange(item.filename, e.target.value)}
+                          onKeyDown={(e) => handleKeyDown(e, item.filename)}
+                          ref={(el) => setActiveInputRef(el)}
                           className="input-cell"
                           style={{ borderColor: 'var(--danger-light)' }}
+                          title="เลือกข้อความแล้วกด F2 เพื่อวงเล็บ"
                         />
                         <button
                           onClick={() => handleInspectRow(item.filename, val)}
@@ -138,9 +180,7 @@ const EditPage: React.FC<EditPageProps> = ({
                       
                       {(tokens || isLoading) && (
                         <div className="mt-3 animate-fade-in relative">
-                           {/* ลูกศรชี้ขึ้น */}
                            <div className="absolute -top-2 left-6 w-4 h-4 bg-sky-50 border-t border-l border-sky-100 transform rotate-45 z-10"></div>
-                           
                            <div className="bg-white rounded-xl p-4 border border-sky-100 shadow-sm relative z-0">
                              {isLoading ? (
                                <div className="flex items-center gap-2 text-sky-500 text-sm">
@@ -148,7 +188,6 @@ const EditPage: React.FC<EditPageProps> = ({
                                  กำลังตัดคำ...
                                </div>
                              ) : (
-                               // ใช้ Class เดียวกับข้างบน
                                <div className="token-grid" style={{ marginTop: 0, padding: '0.5rem', backgroundColor: 'transparent', border: 'none' }}>
                                  {tokens && tokens.map((t, i) => (
                                    <div key={i} className="token-card" style={{ minWidth: 'auto', padding: '0.25rem 0.75rem' }}>

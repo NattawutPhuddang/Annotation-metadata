@@ -1,15 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Scissors, Loader2, ChevronUp, Box } from 'lucide-react';
 
 interface TokenizedTextProps {
   text: string;
   onInspect: (text: string) => Promise<string[]>;
+  isExpanded?: boolean; // เพิ่ม prop นี้
 }
 
-export const TokenizedText: React.FC<TokenizedTextProps> = ({ text, onInspect }) => {
+export const TokenizedText: React.FC<TokenizedTextProps> = ({ text, onInspect, isExpanded = false }) => {
   const [tokens, setTokens] = useState<string[] | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(isExpanded);
+
+  // Pre-load tokens เมื่อ component mount
+  useEffect(() => {
+    const loadTokens = async () => {
+      setLoading(true);
+      try {
+        const result = await onInspect(text);
+        setTokens(result);
+      } catch (error) {
+        console.error('Failed to load tokens:', error);
+        setTokens([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadTokens();
+  }, [text]);
+
+  useEffect(() => {
+    // เมื่อ isExpanded เปลี่ยน ให้อัปเดต expanded state
+    if (isExpanded && !expanded) {
+      setExpanded(true);
+    }
+  }, [isExpanded]);
 
   const handleClick = async () => {
     if (expanded) {
@@ -17,12 +43,6 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({ text, onInspect })
       return;
     }
     setExpanded(true);
-    if (tokens) return;
-
-    setLoading(true);
-    const result = await onInspect(text);
-    setTokens(result);
-    setLoading(false);
   };
 
   return (

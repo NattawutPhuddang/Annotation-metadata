@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Play, Pause, X, Download, Search } from 'lucide-react';
+import { X, Download, Search } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
 import { TokenizedText } from '../components/TokenizedText';
+import { WaveformPlayer } from '../components/WaveformPlayer'; // Import Waveform
 
 interface CorrectPageProps {
   data: AudioItem[];
@@ -64,12 +65,26 @@ const CorrectPage: React.FC<CorrectPageProps> = ({
                   <tr key={item.filename} className="hover:bg-slate-50">
                     <td className="text-center text-slate-400">{globalIdx + 1}</td>
                     <td className="text-mono text-sm">{item.filename}</td>
-                    <td className="text-center">
-                      <div className="flex-center">
-                        <button onClick={() => playAudio(item)} className={`btn-play ${isPlaying ? 'active' : ''}`}>
-                          {isPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
-                        </button>
-                      </div>
+                    <td className="align-top pt-2" style={{ minWidth: '300px' }}>
+                      {/* ใช้ WaveformPlayer ทุกแถว */}
+                      {item.audioPath && (
+                        <WaveformPlayer 
+                          audioPath={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                          isPlaying={isPlaying}
+                          onPlayChange={(playing) => {
+                             // เมื่อ Waveform เล่น/หยุด ให้แจ้ง App เพื่อคุม State
+                             // logic: ถ้ากำลังเล่น (playing=true) ให้บอก App ว่า "เล่นไฟล์นี้นะ"
+                             // ถ้าหยุด (playing=false) ให้บอก App ว่า "หยุด" (หรือถ้าเรากดหยุดเอง App ก็จะรู้จากการ toggle)
+                             if (playing) {
+                               // ถ้า Waveform เริ่มเล่น แต่ State ยังไม่ใช่ไฟล์นี้ ให้สั่งเล่น
+                               if (!isPlaying) playAudio(item);
+                             } else {
+                               // ถ้า Waveform หยุด และ State ยังเป็นไฟล์นี้อยู่ ให้สั่งหยุด
+                               if (isPlaying) playAudio(item); 
+                             }
+                          }}
+                        />
+                      )}
                     </td>
                     <td className="align-top pt-4">
                        <TokenizedText text={item.text} onInspect={onInspectText} />
