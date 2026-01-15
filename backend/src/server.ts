@@ -1,0 +1,210 @@
+import express, { Request, Response } from 'express';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import { exec } from 'child_process';
+import os from 'os'; // เพิ่ม import os
+
+const app = express();
+const PORT = 3001;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// สแกนหาไฟล์เสียงทั้งหมดในโฟลเดอร์และโฟลเดอร์ย่อย
+function scanAudioFiles(dirPath: string, audioFiles: string[] = []): string[] {
+  try {
+    const files = fs.readdirSync(dirPath);
+
+    files.forEach(file => {
+      const filePath = path.join(dirPath, file);
+      const stat = fs.statSync(filePath);
+
+      if (stat.isDirectory()) {
+        // ถ้าเป็นโฟลเดอร์ ให้ค้นหาต่อ
+        scanAudioFiles(filePath, audioFiles);
+      } else if (stat.isFile() && file.endsWith('.wav')) {
+        // ถ้าเป็นไฟล์ .wav ให้เพิ่มเข้า list
+        audioFiles.push(filePath);
+      }
+    });
+
+    return audioFiles;
+  } catch (error) {
+    console.error('Error scanning directory:', error);
+    throw error;
+  }
+}
+
+app.post('/api/list-files', (req: Request, res: Response) => {
+  // ถ้าไม่ส่ง path มา ให้เริ่มที่ Home Directory ของเครื่อง
+  let { currentPath } = req.body;
+  if (!currentPath) {
+    currentPath = os.homedir();
+  }
+
+  try {
+    const resolvedPath = path.resolve(currentPath);
+    const items = fs.readdirSync(resolvedPath, { withFileTypes: true });
+
+    const folders: string[] = [];
+    const files: string[] = [];
+
+    items.forEach(item => {
+      if (item.isDirectory()) {
+        folders.push(item.name);
+      } else {
+        // โชว์เฉพาะไฟล์เสียง หรือไฟล์ที่เกี่ยวข้องเพื่อให้ user มั่นใจ
+        if (/\.(wav|mp3|m4a|flac|aac|ogg)$/i.test(item.name)) {
+          files.push(item.name);
+        }
+      }
+    });
+
+    res.json({
+      path: resolvedPath,
+      parent: path.dirname(resolvedPath),
+      folders,
+      files
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Cannot read directory', path: currentPath });
+  }
+});
+
+// API: สแกนไฟล์เสียง
+app.post('/api/scan-audio', (req: Request, res: Response) => {
+  const { path: audioPath } = req.body;
+
+  if (!audioPath) {
+    return res.status(400).json({ error: 'Path is required' });
+  }
+
+  try {
+    // ตรวจสอบว่า path มีอยู่จริง
+    if (!fs.existsSync(audioPath)) {
+      return res.status(404).json({ error: 'Path not found' });
+    }
+
+    const audioFiles = scanAudioFiles(audioPath);
+    res.json(audioFiles);
+  } catch (error) {
+    console.error('Error in scan-audio:', error);
+    res.status(500).json({ error: 'Failed to scan audio files' });
+  }
+});
+
+// API: Serve ไฟล์เสียง
+app.get('/api/audio/:encodedPath', (req: Request, res: Response) => {
+  try {
+    // 2. ดึงค่าตัวแปรและระบุ Type เป็น string
+    const encodedPath = req.params.encodedPath as string;
+    
+    // หมายเหตุ: Express จะ Decode URL ให้ชั้นนึงแล้ว แต่การใส่ decodeURIComponent ซ้ำ
+    // มักไม่มีผลเสียกับ File Path ทั่วไป (เว้นแต่ชื่อไฟล์จะมี % อยู่)
+    const audioPath = decodeURIComponent(encodedPath);
+
+    // ... (โค้ดส่วนตรวจสอบไฟล์และ stream ไฟล์ ให้ใช้เหมือนเดิม)
+    if (!fs.existsSync(audioPath)) {
+      return res.status(404).json({ error: 'Audio file not found' });
+    }
+    // Stream ไฟล์เสียง
+    const stat = fs.statSync(audioPath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      // รองรับ range request สำหรับการเล่นเสียง
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+      const file = fs.createReadStream(audioPath, { start, end });
+      const head = {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': 'audio/wav',
+      };
+
+      res.writeHead(206, head);
+      file.pipe(res);
+    } else {
+      // ส่งไฟล์ทั้งหมด
+      const head = {
+        'Content-Length': fileSize,
+        'Content-Type': 'audio/wav',
+      };
+      res.writeHead(200, head);
+      fs.createReadStream(audioPath).pipe(res);
+    }
+  } catch (error) {
+    console.error('Error serving audio:', error);
+    res.status(500).json({ error: 'Failed to serve audio file' });
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok', message: 'Audio Annotation Backend is running' });
+});
+
+// API: บันทึกไฟล์ TSV ลงเครื่อง (Real-time Save)
+app.post('/api/save-file', (req: Request, res: Response) => {
+  const { filename, content } = req.body;
+
+  if (!filename || typeof content !== 'string') {
+    return res.status(400).json({ error: 'Invalid data' });
+  }
+
+  try {
+    // บันทึกไฟล์ไว้ที่โฟลเดอร์ root ของ backend (ข้างๆ package.json)
+    // หรือถ้าอยากให้ไปอยู่ที่อื่นก็แก้ path ตรงนี้ได้ครับ
+    const filePath = path.join(__dirname, '..', filename);
+    
+    fs.writeFileSync(filePath, content, 'utf-8');
+    console.log(`💾 Auto-saved: ${filename}`);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving file:', error);
+    res.status(500).json({ error: 'Failed to save file' });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+  console.log(`📁 Ready to scan audio files and serve them`);
+});
+
+// API: ตัดคำด้วย PyThaiNLP (เรียก Python Script)
+app.post('/api/tokenize', (req: Request, res: Response) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'Text required' });
+
+  // Escape double quotes เพื่อป้องกัน command line error
+  const safeText = text.replace(/"/g, '\\"');
+  
+  // Path ไปยังไฟล์ python (Windows อาจต้องแก้คำสั่ง python เป็น python3 หรือ path เต็ม ถ้าไม่ work)
+  const scriptPath = path.join(__dirname, 'tokenizer.py');
+  const command = `python "${scriptPath}" "${safeText}"`;
+
+  exec(command, (error, stdout, stderr) => {
+    if (error) {
+      console.error('Exec error:', error);
+      return res.status(500).json({ error: 'Failed to execute tokenizer' });
+    }
+    
+    try {
+      const tokens = JSON.parse(stdout.trim());
+      if (tokens.error) {
+        return res.status(500).json({ error: tokens.error });
+      }
+      res.json(tokens);
+    } catch (e) {
+      console.error('Parse error:', stdout);
+      res.status(500).json({ error: 'Invalid response from tokenizer' });
+    }
+  });
+});
