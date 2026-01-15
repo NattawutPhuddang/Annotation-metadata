@@ -1,38 +1,128 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
-interface WaveformPlayerProps {
-  audioPath: string;
+interface Props {
+  audioUrl: string;
   isPlaying: boolean;
-  onPlayChange: (playing: boolean) => void;
+  onPlayChange?: (isPlaying: boolean) => void;
+  progressColor?: string;
+  height?: string; // เพิ่มบรรทัดนี้กลับมาเพื่อแก้ Error TS2322
 }
 
-// React.memo ช่วยให้ไม่กระตุกเวลาพิมพ์แก้คำ
-export const WaveformPlayer = React.memo<WaveformPlayerProps>(({ audioPath, isPlaying, onPlayChange }) => {
-  const audioRef = useRef<HTMLAudioElement>(null);
+export const WaveformPlayer: React.FC<Props> = ({
+  audioUrl,
+  isPlaying,
+  onPlayChange,
+  progressColor = '#818cf8', // ค่าเริ่มต้นสี Indigo
+  height = 'h-4' // รับค่ามาแต่กำหนด Default ไว้ (ไม่ได้กระทบ logic slider มากนัก)
+}) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const audio = new Audio(audioUrl);
+    audioRef.current = audio;
 
-    if (isPlaying) {
-      if (audio.paused) audio.play().catch(() => {}); // catch error เล่นซ้อน
-    } else {
-      if (!audio.paused) audio.pause();
+    const updateTime = () => setCurrentTime(audio.currentTime);
+    const updateDuration = () => setDuration(audio.duration);
+    const handleEnded = () => {
+        onPlayChange?.(false);
+        setCurrentTime(0);
+    };
+
+    // Events
+    audio.addEventListener('timeupdate', updateTime);
+    audio.addEventListener('loadedmetadata', updateDuration);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.pause();
+      audio.removeEventListener('timeupdate', updateTime);
+      audio.removeEventListener('loadedmetadata', updateDuration);
+      audio.removeEventListener('ended', handleEnded);
+    };
+  }, [audioUrl, onPlayChange]);
+
+  // Sync Play/Pause
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (isPlaying) audioRef.current.play().catch(e => console.error("Play error:", e));
+    else audioRef.current.pause();
+  }, [isPlaying]);
+
+  // Handle Seek
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const time = Number(e.target.value);
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
     }
-  }, [isPlaying, audioPath]);
+  };
+
+  const formatTime = (t: number) => {
+    if (!t || isNaN(t)) return "0:00";
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
 
   return (
-    <div className="w-full bg-white rounded-lg border border-slate-200 p-2 flex items-center shadow-sm">
-      <audio
-        ref={audioRef}
-        src={audioPath}
-        controls
-        controlsList="nodownload"
-        className="w-full h-8 accent-indigo-600"
-        onPlay={() => !isPlaying && onPlayChange(true)}
-        onPause={() => isPlaying && onPlayChange(false)}
-        onEnded={() => onPlayChange(false)}
-      />
+    <div className={`w-full flex items-center gap-3 px-2 select-none ${height === 'h-1.5' ? 'h-8' : height}`}>
+      {/* เวลาปัจจุบัน */}
+      <span className="text-[10px] font-mono text-slate-400 w-8 text-right tabular-nums">
+        {formatTime(currentTime)}
+      </span>
+      
+      {/* Slider Bar */}
+      <div className="relative flex-1 flex items-center h-4">
+        <input
+          type="range"
+          min="0"
+          max={duration || 100}
+          value={currentTime}
+          onChange={handleSeek}
+          className="
+            absolute w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer
+            focus:outline-none focus:ring-0
+          "
+          style={{
+            // ใช้เทคนิค Gradient เพื่อสร้างสีแถบ Progress ด้านซ้ายของปุ่ม
+            backgroundImage: `linear-gradient(${progressColor}, ${progressColor})`,
+            backgroundSize: `${(currentTime / (duration || 1)) * 100}% 100%`,
+            backgroundRepeat: 'no-repeat'
+          }}
+        />
+        
+        {/* CSS สำหรับปรับแต่งหน้าตาปุ่มลาก (Thumb) ให้น่ารัก มินิมอล */}
+        <style>{`
+          input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: ${progressColor};
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+            transition: transform 0.1s;
+          }
+          input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+          }
+          input[type="range"]::-moz-range-thumb {
+            height: 12px;
+            width: 12px;
+            border-radius: 50%;
+            background: ${progressColor};
+            border: 2px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+          }
+        `}</style>
+      </div>
+
+      {/* เวลาทั้งหมด */}
+      <span className="text-[10px] font-mono text-slate-400 w-8 tabular-nums">
+        {formatTime(duration)}
+      </span>
     </div>
   );
-}, (prev, next) => prev.audioPath === next.audioPath && prev.isPlaying === next.isPlaying);
+};

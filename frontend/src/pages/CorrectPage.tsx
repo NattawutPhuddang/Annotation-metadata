@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Download } from 'lucide-react';
+import { X, Download, Play, Pause } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
 import { TokenizedText } from '../components/TokenizedText';
@@ -14,47 +14,97 @@ interface Props {
   onInspectText: (text: string) => Promise<string[]>;
 }
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 10;
 
 const CorrectPage: React.FC<Props> = ({ data, onMoveToFail, onDownload, playAudio, playingFile, onInspectText }) => {
   const [page, setPage] = useState(1);
   const items = data.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  if (data.length === 0) return <div className="text-center p-10 text-slate-400">ยังไม่มีรายการที่ถูกต้อง</div>;
+  if (data.length === 0) return (
+    <div className="flex flex-col items-center justify-center py-20 text-center text-slate-400">
+      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+        <Download size={32} className="text-slate-300"/>
+      </div>
+      No correct items yet.
+    </div>
+  );
 
   return (
     <div className="animate-fade-in">
-      <div className="flex justify-between mb-4">
-        <h2 className="text-xl font-bold text-emerald-600">Correct ({data.length})</h2>
-        <button onClick={() => onDownload(data, 'Correct.tsv')} className="btn-primary bg-emerald-500"><Download size={18} className="mr-2"/> Download</button>
+      <div className="flex justify-between items-center mb-6 px-2">
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-success">Correct Items</h2>
+          <span className="px-2 py-1 bg-success-bg text-success text-xs font-bold rounded-full">{data.length}</span>
+        </div>
+        <button onClick={() => onDownload(data, 'Correct.tsv')} className="btn-icon w-auto px-4 gap-2 text-sm bg-success text-white hover:bg-emerald-600 shadow-none">
+          <Download size={16}/> Download TSV
+        </button>
       </div>
-      <div className="card-content border-emerald-100">
-        <table className="data-table w-full">
-          <thead><tr><th className="w-16">#</th><th>Audio</th><th>Text</th><th className="w-20">Revert</th></tr></thead>
+
+      <div className="minimal-card mb-8">
+        <table className="custom-table">
+          <thead>
+            <tr>
+              <th className="w-16 text-center">No.</th>
+              <th className="w-[40%]">Audio Source</th>
+              <th>Transcript</th>
+              <th className="w-20 text-center">Revert</th>
+            </tr>
+          </thead>
           <tbody>
-            {items.map((item, idx) => (
-              <tr key={item.filename}>
-                <td className="text-center text-slate-400">{(page-1)*ITEMS_PER_PAGE + idx + 1}</td>
-                <td className="p-2" style={{minWidth: '300px'}}>
-                  <div className="text-xs text-slate-400 font-mono mb-1">{item.filename}</div>
-                  {item.audioPath && (
-                    <WaveformPlayer 
-                      audioPath={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
-                      isPlaying={playingFile === item.filename}
-                      onPlayChange={(p) => { if (p !== (playingFile === item.filename)) playAudio(item); }}
-                    />
-                  )}
-                </td>
-                <td className="align-top pt-4"><TokenizedText text={item.text} onInspect={onInspectText} /></td>
-                <td className="text-center align-middle">
-                  <button onClick={() => onMoveToFail(item)} className="btn-action text-rose-500 hover:bg-rose-50"><X/></button>
-                </td>
-              </tr>
-            ))}
+            {items.map((item, idx) => {
+              const isPlaying = playingFile === item.filename;
+              return (
+                <tr key={item.filename} className="row-hover">
+                  <td className="text-center align-middle">
+                    <span className="text-xs font-mono text-slate-300">{(page-1)*ITEMS_PER_PAGE + idx + 1}</span>
+                  </td>
+                  <td>
+                    <div className="flex flex-col gap-1">
+                       <div className="flex items-center justify-between">
+                          <div className="text-xs text-slate-500 font-medium truncate" title={item.filename}>
+                            {item.filename}
+                          </div>
+                          <button 
+                            onClick={() => playAudio(item)}
+                            className={`btn-icon w-8 h-8 text-success hover:bg-emerald-100 ${isPlaying ? 'bg-emerald-50' : ''}`}
+                          >
+                             {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5"/>}
+                          </button>
+                       </div>
+                       
+                       {item.audioPath ? (
+                          <WaveformPlayer
+                            audioUrl={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                            isPlaying={isPlaying}
+                            onPlayChange={(p: boolean) => { if (p !== isPlaying) playAudio(item); }}
+                            progressColor="#10b981" // Emerald Color
+                          />
+                       ) : <span className="text-xs text-emerald-300">Audio missing</span>}
+                    </div>
+                  </td>
+                  <td className="align-middle">
+                     <div className="text-token pl-4 border-l-2 border-emerald-100 py-1">
+                        <TokenizedText text={item.text} onInspect={onInspectText} />
+                     </div>
+                  </td>
+                  <td className="text-center align-middle">
+                    <button 
+                      onClick={() => onMoveToFail(item)} 
+                      className="btn-icon bg-rose-50 text-rose-400 hover:bg-rose-500 hover:text-white"
+                    >
+                      <X size={20} strokeWidth={2.5}/>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      <Pagination currentPage={page} totalPages={Math.ceil(data.length/ITEMS_PER_PAGE)} onPageChange={setPage} />
+      <div className="flex justify-center pb-10">
+        <Pagination currentPage={page} totalPages={Math.ceil(data.length/ITEMS_PER_PAGE)} onPageChange={setPage} />
+      </div>
     </div>
   );
 };
