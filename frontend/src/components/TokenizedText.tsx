@@ -1,15 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Scissors, Loader2, ChevronUp, Box } from 'lucide-react';
 
 interface TokenizedTextProps {
   text: string;
   onInspect: (text: string) => Promise<string[]>;
+  isExpanded?: boolean; // เพิ่มบรรทัดนี้ เพื่อให้รับ Props ได้ (เครื่องหมาย ? คือส่งหรือไม่ส่งก็ได้)
 }
 
-export const TokenizedText: React.FC<TokenizedTextProps> = ({ text, onInspect }) => {
+export const TokenizedText: React.FC<TokenizedTextProps> = ({ text, onInspect, isExpanded = false }) => {
+  // ใช้ค่า isExpanded ที่ส่งมาเป็นค่าเริ่มต้น
   const [tokens, setTokens] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(isExpanded);
+
+  // ถ้ามีการเปลี่ยนข้อความ (text) หรือเปลี่ยนลำดับ (isExpanded) ให้รีเซ็ตค่าใหม่
+  useEffect(() => {
+    setExpanded(isExpanded);
+    setTokens(null); // รีเซ็ต tokens เมื่อข้อความเปลี่ยน
+    if (isExpanded) {
+       loadTokens();
+    }
+  }, [text, isExpanded]);
+
+  const loadTokens = async () => {
+    setLoading(true);
+    try {
+      const result = await onInspect(text);
+      setTokens(result);
+    } catch (e) {
+      setTokens([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleClick = async () => {
     if (expanded) {
@@ -17,12 +40,9 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({ text, onInspect })
       return;
     }
     setExpanded(true);
-    if (tokens) return;
-
-    setLoading(true);
-    const result = await onInspect(text);
-    setTokens(result);
-    setLoading(false);
+    if (!tokens) {
+      await loadTokens();
+    }
   };
 
   return (
@@ -53,7 +73,7 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({ text, onInspect })
         {expanded && <div className="absolute top-0 left-0 w-1 h-full bg-sky-400"></div>}
       </div>
 
-      {/* ส่วนแสดงการ์ด (ใช้ CSS Class ใหม่) */}
+      {/* ส่วนแสดงการ์ด */}
       {expanded && (
         <div className="mt-2 animate-fade-in">
           {loading ? (
