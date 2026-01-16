@@ -1,7 +1,16 @@
-import React, { useState } from 'react';
-import { Upload, FolderOpen, Music, FileText, Search } from 'lucide-react'; // เพิ่ม Search icon
+import React, { useRef } from 'react';
+import { 
+  Music, 
+  FileText, 
+  FolderOpen, 
+  Loader2, 
+  CheckCircle2, 
+  UploadCloud,
+  ArrowRight
+} from 'lucide-react';
 import { AudioItem } from '../types';
-import { DirectoryPicker } from '../components/DirectoryPicker'; // Import Modal
+// อย่าลืม import ไฟล์ css ในไฟล์ entry point หลัก (เช่น main.tsx หรือ App.tsx) 
+// import './app.css'; 
 
 interface UploadPageProps {
   metadata: AudioItem[];
@@ -9,90 +18,151 @@ interface UploadPageProps {
   setAudioPath: (path: string) => void;
   onMetadataUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onScan: () => void;
+  isScanning?: boolean;
+  onFolderSelect: (files: FileList) => void;
 }
 
 const UploadPage: React.FC<UploadPageProps> = ({ 
   metadata, 
   audioPath, 
-  setAudioPath, 
   onMetadataUpload, 
-  onScan 
+  onScan,
+  isScanning = false,
+  onFolderSelect
 }) => {
-  const [isPickerOpen, setIsPickerOpen] = useState(false); // State เปิดปิด Modal
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check Status
+  const isMetaReady = metadata.length > 0;
+  const isAudioReady = audioPath && audioPath !== '';
+  const canStart = isMetaReady && isAudioReady && !isScanning;
+
+  // Handlers
+  const handleFolderClick = () => fileInputRef.current?.click();
+  const handleFolderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      onFolderSelect(e.target.files);
+    }
+  };
 
   return (
+    // 1. ใช้ Class: page-container, center-content, bg-pastel-mix
     <div className="page-container center-content bg-pastel-mix">
+      
+      {/* 2. ใช้ Class: glass-card */}
       <div className="glass-card">
-        <div className="text-center mb-8">
-          <div className="icon-box-lg">
-            <Music size={32} />
-          </div>
-          <h1 className="text-title">Audio Annotation</h1>
-          <p className="text-subtitle">เตรียมข้อมูลสำหรับตรวจสอบเสียง</p>
-        </div>
         
-        <div className="space-y-6">
-          {/* Upload TSV */}
-          <div>
-            <label className="upload-area">
-              <FileText size={32} style={{ color: '#a5b4fc', marginBottom: '0.5rem' }} />
-              <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#64748b' }}>
-                {metadata.length > 0 ? (
-                  <span style={{ color: 'var(--success-color)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    ✓ พร้อมแล้ว {metadata.length} รายการ
-                  </span>
-                ) : (
-                  "อัพโหลดไฟล์ Metadata (.tsv)"
-                )}
-              </div>
-              <input type="file" accept=".tsv" onChange={onMetadataUpload} className="hidden" />
-            </label>
+        {/* Header Section */}
+        <div className="text-center mb-8">
+          {/* icon-box-lg */}
+          <div className="icon-box-lg">
+            <Music size={32} strokeWidth={2} />
           </div>
+          {/* text-title & text-subtitle */}
+          <h1 className="text-title">Audio Annotator</h1>
+          <p className="text-subtitle">Setup your workspace to begin</p>
+        </div>
 
-          {/* Input Path with Browse Button */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-500 ml-1">โฟลเดอร์ไฟล์เสียง</label>
-            <div className="flex gap-2">
-              <div className="input-group flex-1">
-                <div className="input-icon">
-                  <FolderOpen size={20} />
-                </div>
-                <input
-                  type="text"
-                  value={audioPath}
-                  onChange={(e) => setAudioPath(e.target.value)}
-                  className="input-styled"
-                  placeholder="C:\Users\Music\..."
-                />
-              </div>
-              {/* ปุ่ม Browse */}
-              <button 
-                onClick={() => setIsPickerOpen(true)}
-                className="px-4 bg-white border border-slate-200 rounded-2xl text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-2 font-medium"
-              >
-                <Search size={18} /> Browse
-              </button>
+        <div className="space-y-6" >
+          
+          {/* --- Step 1: Metadata Upload --- */}
+          {/* ใช้ Class: upload-area */}
+          <label 
+            className="upload-area group relative"
+            style={isMetaReady ? { 
+              borderColor: 'var(--success)', 
+              backgroundColor: 'var(--success-bg)' 
+            } : {}}
+          >
+            <div className={`mb-3 transition-colors ${isMetaReady ? 'text-emerald-600' : 'text-slate-400'}`}>
+              {isMetaReady ? <CheckCircle2 size={40} /> : <FileText size={40} />}
             </div>
+            
+            <div className="text-center z-10">
+              <span className={`text-sm font-bold block ${isMetaReady ? 'text-emerald-700' : 'text-slate-600'}`}>
+                {isMetaReady ? 'Metadata Loaded' : 'Upload Metadata'}
+              </span>
+              <span className="text-xs text-slate-400 mt-1 block">
+                {isMetaReady ? `${metadata.length} items ready` : 'Drag & drop or click to browse .tsv'}
+              </span>
+            </div>
+
+            {/* Hidden Input */}
+            <input type="file" accept=".tsv" onChange={onMetadataUpload} className="hidden" />
+            
+            {!isMetaReady && (
+              <div className="absolute right-4 top-4 text-slate-300 group-hover:text-indigo-400 transition-colors">
+                <UploadCloud size={20} />
+              </div>
+            )}
+          </label>
+
+
+          {/* --- Step 2: Audio Folder Selection --- */}
+          {/* ใช้ Class: input-group & input-styled */}
+          <div className="relative" style={{ marginTop: '1.5rem' }}>
+            <div 
+              className="input-group cursor-pointer" 
+              onClick={handleFolderClick}
+            >
+              <div className="input-icon" style={{ color: isAudioReady ? 'var(--success)' : 'var(--text-light)' }}>
+                {isAudioReady ? <CheckCircle2 size={20} /> : <FolderOpen size={20} />}
+              </div>
+              <input
+                type="text"
+                readOnly
+                value={isAudioReady ? audioPath : "Select audio source folder..."}
+                className="input-styled cursor-pointer hover:border-indigo-300"
+                style={isAudioReady ? { 
+                  borderColor: 'var(--success)', 
+                  color: 'var(--success-text)',
+                  backgroundColor: 'var(--success-bg)'
+                } : {}}
+              />
+
+              {!isAudioReady && (
+                <div className="absolute right-4 top-3.5 text-slate-300">
+                  <ArrowRight size={18} />
+                </div>
+              )}
+            </div>
+
+            {/* Native File Input (Hidden) */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFolderChange}
+              // @ts-ignore
+              webkitdirectory=""
+              directory=""
+              multiple
+            />
           </div>
 
-          {/* Start Button */}
+          {/* --- Action Button --- */}
+          {/* ใช้ Class: btn-primary */}
           <button
             onClick={onScan}
-            disabled={!metadata.length || !audioPath}
-            className="btn-primary"
+            disabled={!canStart}
+            className="btn-primary flex items-center justify-center gap-2 mt-8"
+            style={!canStart ? { backgroundColor: 'var(--text-light)', boxShadow: 'none' } : {}}
           >
-            เริ่มตรวจสอบ
+            {isScanning ? (
+              <>
+                <Loader2 size={20} className="animate-spin" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <span>Start Annotation</span>
+            )}
           </button>
+
         </div>
       </div>
 
-      {/* Directory Picker Modal */}
-      <DirectoryPicker 
-        isOpen={isPickerOpen}
-        onClose={() => setIsPickerOpen(false)}
-        onSelect={(path) => setAudioPath(path)}
-        initialPath={audioPath}
-      />
+      {/* Footer */}
+
     </div>
   );
 };

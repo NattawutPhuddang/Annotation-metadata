@@ -75,7 +75,7 @@ const CorrectPage: React.FC<Props> = ({ data, onMoveToFail, onDownload, playAudi
                        
                        {item.audioPath ? (
                           <WaveformPlayer
-                            audioUrl={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                            audioUrl={item.audioPath}
                             isPlaying={isPlaying}
                             onPlayChange={(p: boolean) => { if (p !== isPlaying) playAudio(item); }}
                             progressColor="#10b981" // Emerald Color

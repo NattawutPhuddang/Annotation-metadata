@@ -79,7 +79,7 @@ const AnnotationPage: React.FC<Props> = ({ pendingItems, onDecision, playAudio, 
                        {/* Line Player */}
                        {item.audioPath ? (
                           <WaveformPlayer
-                            audioUrl={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                            audioUrl={item.audioPath}
                             isPlaying={isPlaying}
                             onPlayChange={(p) => { if (p !== isPlaying) playAudio(item); }}
                             progressColor="#818cf8" // Theme Color

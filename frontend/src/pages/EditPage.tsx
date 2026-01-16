@@ -97,7 +97,7 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
                        {item.audioPath ? (
                           <div className="bg-rose-50/30 rounded-lg p-2 border border-rose-100/50">
                              <WaveformPlayer
-                               audioUrl={`http://localhost:3001/api/audio/${encodeURIComponent(item.audioPath)}`}
+                               audioUrl={item.audioPath}
                                isPlaying={isPlaying}
                                onPlayChange={(p: boolean) => { if (p !== isPlaying) playAudio(item); }}
                                progressColor="#f43f5e"
