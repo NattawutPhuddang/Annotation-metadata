@@ -3,6 +3,14 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 
+const DATA_DIR = path.join(__dirname, '..', 'data');
+// ตรวจสอบว่ามีโฟลเดอร์ data ไหม ถ้าไม่มีให้สร้าง (กันเหนียว)
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+const getFilePath = (filename: string) => path.join(DATA_DIR, filename);
+
 const app = express();
 const PORT = 3001;
 
@@ -34,14 +42,14 @@ app.post('/api/tokenize', (req, res) => {
 
 app.get('/api/load-file', (req, res) => {
   const filename = req.query.filename as string;
-  const filePath = path.join(__dirname, '..', filename);
+  const filePath = getFilePath(filename); // 👈 แก้ตรงนี้
   if (fs.existsSync(filePath)) res.sendFile(filePath);
   else res.status(404).send('Not found');
 });
 
 app.post('/api/save-file', (req, res) => {
   const { filename, content } = req.body;
-  const filePath = path.join(__dirname, '..', filename);
+  const filePath = getFilePath(filename); // 👈 แก้ตรงนี้
   fs.writeFile(filePath, content, 'utf8', (err) => {
     if (err) res.status(500).send('Error');
     else res.send('Saved');
@@ -81,11 +89,9 @@ app.post('/api/scan-audio', (req, res) => {
 // 🟢 API ใหม่: ต่อท้ายไฟล์ (สำหรับ ListOfChange) ป้องกันการทับกัน
 app.post('/api/append-change', (req, res) => {
   const { original, changed } = req.body;
-  // จัด Format ให้เป็น TSV: ขึ้นบรรทัดใหม่ + คำผิด + แท็บ + คำถูก
   const line = `\n${original}\t${changed}`;
+  const filePath = getFilePath('ListOfChange.tsv'); // 👈 แก้ตรงนี้
   
-  // ใช้ appendFile เพื่อ "ต่อท้าย" ไฟล์เดิม (ไม่ทับของเก่า)
-  const filePath = path.join(__dirname, '..', 'ListOfChange.tsv'); 
   fs.appendFile(filePath, line, 'utf8', (err) => {
     if (err) res.status(500).send('Error appending');
     else res.send('Appended');
