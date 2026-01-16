@@ -48,10 +48,13 @@ app.post('/api/save-file', (req, res) => {
   });
 });
 
-app.get('/api/audio/:path*', (req, res) => {
+app.get(/^\/api\/audio\/(.*)$/, (req, res) => {
   const params = req.params as any;
-  const rawPath = (params.path || '') + (params[0] || '');
+  
+  // params[0] จะเก็บค่า Path ทั้งหมดที่ Regex จับได้
+  const rawPath = params[0] || '';
   const audioPath = decodeURIComponent(rawPath);
+  
   if (fs.existsSync(audioPath)) res.sendFile(audioPath);
   else res.status(404).send('Not found');
 });
@@ -73,6 +76,20 @@ app.post('/api/scan-audio', (req, res) => {
   }
   scan(dirPath);
   res.json(results);
+});
+
+// 🟢 API ใหม่: ต่อท้ายไฟล์ (สำหรับ ListOfChange) ป้องกันการทับกัน
+app.post('/api/append-change', (req, res) => {
+  const { original, changed } = req.body;
+  // จัด Format ให้เป็น TSV: ขึ้นบรรทัดใหม่ + คำผิด + แท็บ + คำถูก
+  const line = `\n${original}\t${changed}`;
+  
+  // ใช้ appendFile เพื่อ "ต่อท้าย" ไฟล์เดิม (ไม่ทับของเก่า)
+  const filePath = path.join(__dirname, '..', 'ListOfChange.tsv'); 
+  fs.appendFile(filePath, line, 'utf8', (err) => {
+    if (err) res.status(500).send('Error appending');
+    else res.send('Appended');
+  });
 });
 
 app.listen(PORT, () => {

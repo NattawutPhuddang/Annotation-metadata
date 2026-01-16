@@ -1,0 +1,14 @@
+# audio-annotation/backend/docker-compose.yml
+version: '3.8'
+services:
+  api:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      # Map ไฟล์จากเครื่องจริง เข้าไปใน Docker
+      # เพื่อให้ข้อมูลยังอยู่แม้ลบ Container
+      - ./data:/app/data 
+      # หมายเหตุ: คุณอาจต้องแก้โค้ด server.ts ให้ path ไปอ่านไฟล์ใน /app/data แทน root
+    environment:
+      - PORT=3001

@@ -9,16 +9,18 @@ import { LogOut, Save, Music } from 'lucide-react';
 
 type Tab = 'pending' | 'correct' | 'fail';
 
+// 🔴 CONFIG: แก้ IP ตรงนี้เป็นของเครื่อง Server (เครื่องคุณ)
+// เพื่อนทุกคนที่จะใช้ ต้องแก้ไฟล์นี้ให้ชี้มาที่ IP ของคุณ
+const API_BASE = 'http://10.2.98.118:3001'; 
+
 const App: React.FC = () => {
   // --- Data Stores ---
   const [hasStarted, setHasStarted] = useState<boolean>(() => JSON.parse(localStorage.getItem('hasStarted') || 'false'));
   const [currentTab, setCurrentTab] = useState<Tab>('pending');
   
   const [metadata, setMetadata] = useState<AudioItem[]>(() => JSON.parse(localStorage.getItem('metadata') || '[]'));
-  // audioPath ใช้เก็บข้อความแสดงผลเฉยๆ (เช่น "Selected: Music (50 files)")
   const [audioPath, setAudioPath] = useState<string>(() => localStorage.getItem('audioPath') || '');
   
-  // เก็บรายการไฟล์เสียง
   const [audioFiles, setAudioFiles] = useState<AudioItem[]>(() => JSON.parse(localStorage.getItem('audioFiles') || '[]'));
   
   const [correctData, setCorrectData] = useState<AudioItem[]>(() => JSON.parse(localStorage.getItem('correctData') || '[]'));
@@ -29,7 +31,6 @@ const App: React.FC = () => {
   const [playingFile, setPlayingFile] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
 
-  // เก็บไฟล์จริง (File Objects) ที่เลือกมาจาก Browser popup (ใช้ชั่วคราว ไม่ลง LocalStorage)
   const [selectedLocalFiles, setSelectedLocalFiles] = useState<File[]>([]);
 
   // --- Persistence ---
@@ -38,7 +39,6 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('audioPath', audioPath); }, [audioPath]);
   
   useEffect(() => { 
-    // เก็บเฉพาะ Metadata ลง Storage (ไม่เก็บ URL เพราะ Blob URL จะเสียเมื่อปิดเว็บ)
     const safeToSave = audioFiles.map(a => ({ ...a, audioPath: '' }));
     localStorage.setItem('audioFiles', JSON.stringify(safeToSave)); 
   }, [audioFiles]);
@@ -47,13 +47,11 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('incorrectData', JSON.stringify(incorrectData)); }, [incorrectData]);
   useEffect(() => { localStorage.setItem('changes', JSON.stringify(changes)); }, [changes]);
 
-  // --- 1. Fix Stale URLs & Load Data (สำคัญมาก: แก้ปัญหา Error ไฟล์ไม่เจอ) ---
+  // --- 1. Fix Stale URLs & Load Data (แก้ไขให้โหลด Change เก่ามาด้วย) ---
   useEffect(() => {
-    // เช็คว่ามีไฟล์ค้างเก่าที่เปิดไม่ได้หรือไม่
     const savedAudioFiles = JSON.parse(localStorage.getItem('audioFiles') || '[]');
     if (savedAudioFiles.length > 0) {
       const samplePath = savedAudioFiles[0].audioPath || '';
-      // ถ้าเจอ Blob URL เก่า หรือ Path ติดเครื่องที่ Browser บล็อก -> ล้างทิ้ง
       if (samplePath.startsWith('blob:') || samplePath.includes(':')) {
         console.log('Clearing stale audio paths...');
         setAudioFiles([]); 
@@ -63,25 +61,45 @@ const App: React.FC = () => {
       }
     }
 
-    // โหลดไฟล์ TSV จาก Backend
+    // ฟังก์ชันโหลดไฟล์จาก Server
     const loadTSV = async (name: string) => {
       try {
-        const res = await fetch(`http://localhost:3001/api/load-file?filename=${name}`);
+        const res = await fetch(`${API_BASE}/api/load-file?filename=${name}`);
         if (!res.ok) return [];
         const txt = await res.text();
         return txt.split('\n').slice(1).map(r => {
-          const [f, t] = r.split('\t');
+          const [f, t] = r.trim().split('\t');
           return (f && t) ? { filename: f, text: t } : null;
         }).filter(Boolean) as AudioItem[];
       } catch { return []; }
     };
-    Promise.all([loadTSV('Correct.tsv'), loadTSV('fail.tsv')]).then(([c, f]) => {
+
+    // ฟังก์ชันโหลด ListOfChange จาก Server
+    const loadChanges = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/load-file?filename=ListOfChange.tsv`);
+        if (!res.ok) return [];
+        const txt = await res.text();
+        return txt.split('\n').slice(1).map(r => {
+          const [o, c] = r.trim().split('\t');
+          return (o && c) ? { original: o, changed: c } : null;
+        }).filter(Boolean);
+      } catch { return []; }
+    };
+
+    // โหลดพร้อมกัน 3 ไฟล์
+    Promise.all([
+      loadTSV('Correct.tsv'), 
+      loadTSV('fail.tsv'), 
+      loadChanges()
+    ]).then(([c, f, ch]) => {
       if (c.length) setCorrectData(c);
       if (f.length) setIncorrectData(f);
+      if (ch.length) setChanges(ch as any); // Stack changes ต่อจากของเดิม
     });
   }, []);
 
-  // --- 2. Check Refresh (แจ้งเตือนถ้ารีเฟรชแล้วไฟล์หาย) ---
+  // --- 2. Check Refresh ---
   useEffect(() => {
     if (hasStarted && audioFiles.length > 0 && !audioFiles[0].audioPath) {
         alert("⚠️ กรุณาเลือกโฟลเดอร์ไฟล์เสียงใหม่อีกครั้ง\n(เนื่องจาก Browser รีเฟรชหน้าจอทำให้การเชื่อมต่อไฟล์หลุดไป)");
@@ -103,7 +121,7 @@ const App: React.FC = () => {
   const saveFile = async (name: string, data: AudioItem[]) => {
     setIsSaving(true);
     const content = 'filename\ttext\n' + data.map(i => `${i.filename}\t${i.text}`).join('\n');
-    await fetch('http://localhost:3001/api/save-file', {
+    await fetch(`${API_BASE}/api/save-file`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ filename: name, content })
     });
@@ -127,37 +145,44 @@ const App: React.FC = () => {
     autoSave(newC, newF);
   };
 
-  const handleCorrection = (item: AudioItem, newText: string) => {
-  // ส่วนนี้ทำงานถูกแล้ว (เก็บลง ListOfChange)
-  const matches = [...newText.matchAll(/\(([^,]+),([^)]+)\)/g)];
-  if (matches.length > 0) {
-    const newChanges = [...changes, ...matches.map(m => ({ original: m[1], changed: m[2] }))];
-    setChanges(newChanges);
-    const content = 'Wrong\tCorrect\n' + newChanges.map(c => `${c.original}\t${c.changed}`).join('\n');
-    fetch('http://localhost:3001/api/save-file', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ filename: 'ListOfChange.tsv', content })
-    });
-  }
+  // 🟢 แก้ไข: ใช้ API append-change และแก้ Regex ให้ถูกต้อง
+  const handleCorrection = async (item: AudioItem, newText: string) => {
+    // 1. หาคำที่ถูกแก้ (Pattern: (คำผิด,คำถูก))
+    const matches = [...newText.matchAll(/\(([^,]+),([^)]+)\)/g)];
+    
+    if (matches.length > 0) {
+      // 2. วนลูปส่ง API ไป "ต่อท้าย" ที่ Server
+      for (const m of matches) {
+        try {
+          await fetch(`${API_BASE}/api/append-change`, {
+             method: 'POST',
+             headers: {'Content-Type': 'application/json'},
+             body: JSON.stringify({ original: m[1], changed: m[2] })
+          });
+        } catch (err) {
+          console.error("Save change failed", err);
+        }
+      }
 
-  // 🔴 โค้ดเดิม (สาเหตุที่ทำให้คำหายไป):
-  // const cleanText = newText.replace(/\([^)]+\)/g, '');
+      // อัปเดต State
+      const newChanges = [...changes, ...matches.map(m => ({ original: m[1], changed: m[2] }))];
+      setChanges(newChanges);
+    }
 
-  // 🟢 โค้ดใหม่ (แก้ไขให้ใช้คำที่อยู่หลังคอมม่ามาแทนที่):
-  const cleanText = newText.replace(/\(([^,]+),([^)]+)\)/g, '$2');
-
-  // ส่วนที่เหลือเหมือนเดิม...
-  const newItem = { ...item, text: cleanText };
-  const newF = incorrectData.filter(i => i.filename !== item.filename);
-  const newC = [...correctData, newItem];
-  setIncorrectData(newF);
-  setCorrectData(newC);
-  autoSave(newC, newF);
-};
+    // 3. คลีนข้อความเอาวงเล็บออก (เอาคำถูกไว้ด้วย $2)
+    const cleanText = newText.replace(/\(([^,]+),([^)]+)\)/g, '$2');
+    
+    const newItem = { ...item, text: cleanText };
+    const newF = incorrectData.filter(i => i.filename !== item.filename);
+    const newC = [...correctData, newItem];
+    setIncorrectData(newF);
+    setCorrectData(newC);
+    autoSave(newC, newF);
+  };
 
   const handleInspect = async (text: string) => {
     try {
-      const res = await fetch('http://localhost:3001/api/tokenize', {
+      const res = await fetch(`${API_BASE}/api/tokenize`, {
         method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ text })
       });
@@ -186,7 +211,6 @@ const App: React.FC = () => {
       audioPath={audioPath} 
       setAudioPath={setAudioPath}
       isScanning={isScanning}
-      // รับไฟล์จาก Popup Windows และอัปเดต UI
       onFolderSelect={(fileList) => {
          setSelectedLocalFiles(Array.from(fileList));
          if (fileList.length > 0) {
@@ -205,30 +229,25 @@ const App: React.FC = () => {
           r.readAsText(f);
         }
       }}
-      // เมื่อกดปุ่ม Start
       onScan={async () => {
         setIsScanning(true);
-        await new Promise(r => setTimeout(r, 500)); // Delay UI นิดหน่อย
+        await new Promise(r => setTimeout(r, 500));
 
         try {
           if (selectedLocalFiles.length > 0) {
-            // สร้าง Map ของไฟล์จริง เพื่อค้นหาเร็วๆ
             const fileMap = new Map<string, File>();
             for (const f of selectedLocalFiles) {
-              // Map ทั้งชื่อเต็ม (audio.wav) และชื่อตัดนามสกุล (audio)
               fileMap.set(f.name, f);
               const nameNoExt = f.name.substring(0, f.name.lastIndexOf('.'));
               if (nameNoExt) fileMap.set(nameNoExt, f);
             }
 
             const matched = metadata.map(m => {
-               // ค้นหาไฟล์ที่ชื่อตรงกับ Metadata
                const file = fileMap.get(m.filename);
                if (file) {
                  return { 
                    filename: m.filename, 
                    text: m.text, 
-                   // สร้าง Blob URL (Link ชั่วคราวสำหรับเล่นไฟล์)
                    audioPath: URL.createObjectURL(file) 
                  };
                }
@@ -278,7 +297,6 @@ const App: React.FC = () => {
         <div className="flex items-center gap-4">
            {isSaving && <span className="text-xs text-indigo-400 flex gap-2 items-center"><Save size={14} className="animate-spin"/> Saving changes...</span>}
            <button onClick={() => {
-             // Reset เพื่อเลือกโฟลเดอร์ใหม่
              setHasStarted(false);
              setAudioFiles([]);
              setSelectedLocalFiles([]);
