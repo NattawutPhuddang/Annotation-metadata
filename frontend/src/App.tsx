@@ -128,24 +128,32 @@ const App: React.FC = () => {
   };
 
   const handleCorrection = (item: AudioItem, newText: string) => {
-    const matches = [...newText.matchAll(/\(([^,]+),([^)]+)\)/g)];
-    if (matches.length > 0) {
-      const newChanges = [...changes, ...matches.map(m => ({ original: m[1], changed: m[2] }))];
-      setChanges(newChanges);
-      const content = 'Wrong\tCorrect\n' + newChanges.map(c => `${c.original}\t${c.changed}`).join('\n');
-      fetch('http://localhost:3001/api/save-file', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ filename: 'ListOfChange.tsv', content })
-      });
-    }
-    const cleanText = newText.replace(/\([^)]+\)/g, '');
-    const newItem = { ...item, text: cleanText };
-    const newF = incorrectData.filter(i => i.filename !== item.filename);
-    const newC = [...correctData, newItem];
-    setIncorrectData(newF);
-    setCorrectData(newC);
-    autoSave(newC, newF);
-  };
+  // ส่วนนี้ทำงานถูกแล้ว (เก็บลง ListOfChange)
+  const matches = [...newText.matchAll(/\(([^,]+),([^)]+)\)/g)];
+  if (matches.length > 0) {
+    const newChanges = [...changes, ...matches.map(m => ({ original: m[1], changed: m[2] }))];
+    setChanges(newChanges);
+    const content = 'Wrong\tCorrect\n' + newChanges.map(c => `${c.original}\t${c.changed}`).join('\n');
+    fetch('http://localhost:3001/api/save-file', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ filename: 'ListOfChange.tsv', content })
+    });
+  }
+
+  // 🔴 โค้ดเดิม (สาเหตุที่ทำให้คำหายไป):
+  // const cleanText = newText.replace(/\([^)]+\)/g, '');
+
+  // 🟢 โค้ดใหม่ (แก้ไขให้ใช้คำที่อยู่หลังคอมม่ามาแทนที่):
+  const cleanText = newText.replace(/\(([^,]+),([^)]+)\)/g, '$2');
+
+  // ส่วนที่เหลือเหมือนเดิม...
+  const newItem = { ...item, text: cleanText };
+  const newF = incorrectData.filter(i => i.filename !== item.filename);
+  const newC = [...correctData, newItem];
+  setIncorrectData(newF);
+  setCorrectData(newC);
+  autoSave(newC, newF);
+};
 
   const handleInspect = async (text: string) => {
     try {
