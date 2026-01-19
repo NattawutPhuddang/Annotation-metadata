@@ -181,6 +181,43 @@ app.get(/^\/api\/audio\/(.*)$/, (req, res) => {
   else res.status(404).send('Not found');
 });
 
+// 🟢 NEW: API สำหรับดึงสถิติ Dashboard
+app.get('/api/dashboard-stats', (req, res) => {
+  try {
+    if (!fs.existsSync(DATA_DIR)) return res.json([]);
+    
+    const files = fs.readdirSync(DATA_DIR);
+    const stats: { user: string; count: number }[] = [];
+
+    files.forEach(file => {
+      // ค้นหาไฟล์ที่มีรูปแบบ: {ชื่อพนักงาน}-Correct.tsv
+      // (ไม่นับไฟล์ Correct.tsv กลาง เพราะอันนั้นเป็นผลรวม)
+      const match = file.match(/^(.+)-Correct\.tsv$/);
+      
+      if (match) {
+        const userId = match[1]; // ชื่อพนักงาน เช่น EMP001
+        const filePath = path.join(DATA_DIR, file);
+        
+        // อ่านไฟล์และนับบรรทัด
+        const content = fs.readFileSync(filePath, 'utf8');
+        // กรองบรรทัดว่างออก และลบ 1 (Header)
+        const lines = content.split('\n').filter(line => line.trim() !== '');
+        const count = Math.max(0, lines.length - 1);
+        
+        stats.push({ user: userId, count });
+      }
+    });
+
+    // เรียงลำดับจากมากไปน้อย
+    stats.sort((a, b) => b.count - a.count);
+    
+    res.json(stats);
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    res.status(500).json([]);
+  }
+});
+
 app.post('/api/scan-audio', (req, res) => {
   const { path: dirPath } = req.body;
   if (!fs.existsSync(dirPath)) return res.status(404).send('Not found');
