@@ -444,6 +444,16 @@ const App: React.FC = () => {
             setIsScanning(false);
           }
         }}
+        onLogout={() => {
+          if(window.confirm('Log out from workspace?')) { 
+            setEmployeeId(''); 
+            localStorage.removeItem('employeeId'); 
+            setHasStarted(false); 
+            setAudioFiles([]); 
+            setAudioPath(''); 
+            setTokenCache(new Map());
+          }
+        }}
       />
       </>
     );

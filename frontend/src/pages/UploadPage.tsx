@@ -6,7 +6,8 @@ import {
   Loader2, 
   CheckCircle2, 
   UploadCloud,
-  ArrowRight
+  ArrowRight,
+  LogOut
 } from 'lucide-react';
 import { AudioItem } from '../types';
 // อย่าลืม import ไฟล์ css ในไฟล์ entry point หลัก (เช่น main.tsx หรือ App.tsx) 
@@ -20,6 +21,7 @@ interface UploadPageProps {
   onScan: () => void;
   isScanning?: boolean;
   onFolderSelect: (files: FileList) => void;
+  onLogout: () => void;
 }
 
 const UploadPage: React.FC<UploadPageProps> = ({ 
@@ -28,7 +30,8 @@ const UploadPage: React.FC<UploadPageProps> = ({
   onMetadataUpload, 
   onScan,
   isScanning = false,
-  onFolderSelect
+  onFolderSelect,
+  onLogout
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -49,6 +52,14 @@ const UploadPage: React.FC<UploadPageProps> = ({
     // 1. ใช้ Class: page-container, center-content, bg-pastel-mix
     <div className="page-container center-content bg-pastel-mix">
       
+      <button 
+        onClick={onLogout}
+        className="absolute top-6 right-6 flex items-center gap-2 text-slate-500 hover:text-rose-500 transition-colors font-medium text-sm bg-white/50 px-4 py-2 rounded-full hover:bg-white shadow-sm backdrop-blur-sm z-50"
+      >
+        <LogOut size={18} />
+        <span>Logout</span>
+      </button>
+
       {/* 2. ใช้ Class: glass-card */}
       <div className="glass-card">
         
