@@ -12,7 +12,7 @@ if (!fs.existsSync(DATA_DIR)) {
 const getFilePath = (filename: string) => path.join(DATA_DIR, filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = 3003;
 
 app.use(cors());
 app.use(express.json());

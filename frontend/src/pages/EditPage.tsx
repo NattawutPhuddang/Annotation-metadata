@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Check, Download, Play, Pause } from 'lucide-react';
+import { Check, Play, Pause } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
 import { WaveformPlayer } from '../components/WaveformPlayer';
 import { TokenizedText } from '../components/TokenizedText';
+import { DownloadButton } from '../components/DownloadButton';
 
 interface Props {
   data: AudioItem[];
@@ -56,9 +57,7 @@ const EditPage: React.FC<Props> = ({ data, onSaveCorrection, onDownload, playAud
           <h2 className="text-xl font-bold text-danger">Needs Correction</h2>
           <span className="px-2 py-1 bg-danger-bg text-danger text-xs font-bold rounded-full">{data.length}</span>
         </div>
-        <button onClick={() => onDownload(data, 'fail.tsv')} className="btn-icon w-auto px-4 gap-2 text-sm bg-danger text-white hover:bg-rose-600 shadow-none">
-          <Download size={16}/> Download TSV
-        </button>
+        <DownloadButton onClick={() => onDownload(data, 'fail.tsv')} variant="danger" />
       </div>
 
       <div className="minimal-card mb-8">

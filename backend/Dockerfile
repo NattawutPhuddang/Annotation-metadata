@@ -16,6 +16,6 @@ RUN touch Correct.tsv fail.tsv ListOfChange.tsv
 # Compile TypeScript
 RUN npm run build
 
-EXPOSE 3001
+EXPOSE 3003
 
 CMD ["node", "dist/server.js"]
