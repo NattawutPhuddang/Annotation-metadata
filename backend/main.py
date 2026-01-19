@@ -38,6 +38,18 @@ class AppendChangeRequest(BaseModel):
 class ScanAudioRequest(BaseModel):
     path: str
 
+class AudioItem(BaseModel):
+    filename: str
+    text: str
+
+class AppendTsvRequest(BaseModel):
+    filename: str
+    item: AudioItem
+
+class DeleteTsvEntryRequest(BaseModel):
+    filename: str
+    key: str
+
 def get_file_path(filename):
     return os.path.join(DATA_FOLDER, filename)
 
@@ -118,6 +130,76 @@ def get_audio(path: str = Query(...)):
     if os.path.exists(path):
         return FileResponse(path)
     return HTTPException(status_code=404, detail="File not found")
+
+@app.post("/api/append-tsv")
+def append_tsv(req: AppendTsvRequest):
+    file_path = get_file_path(req.filename)
+    rows = []
+
+    # 1. อ่านข้อมูลเก่าขึ้นมา (ถ้ามีไฟล์)
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+            if len(lines) > 1: # ข้าม Header
+                for line in lines[1:]:
+                    if not line.strip(): continue
+                    parts = line.split('\t')
+                    if len(parts) >= 2:
+                        # แยก filename กับ text
+                        rows.append({"filename": parts[0], "text": "\t".join(parts[1:])})
+
+    # 2. เช็คว่ามี filename นี้อยู่แล้วหรือยัง? (Upsert Logic)
+    found = False
+    for row in rows:
+        if row["filename"] == req.item.filename:
+            row["text"] = req.item.text # อัปเดตข้อความใหม่
+            found = True
+            break
+    
+    if not found:
+        rows.append({"filename": req.item.filename, "text": req.item.text})
+
+    # 3. เขียนไฟล์ใหม่
+    header = "filename\ttext"
+    content = [header]
+    for row in rows:
+        content.append(f"{row['filename']}\t{row['text']}")
+    
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(content))
+        
+    return {"status": "saved (upsert)"}
+
+# 3. เพิ่ม API Endpoint: delete-tsv-entry (สำหรับลบรายการเมื่อกดย้ายไป Fail)
+@app.post("/api/delete-tsv-entry")
+def delete_tsv_entry(req: DeleteTsvEntryRequest):
+    file_path = get_file_path(req.filename)
+    
+    if not os.path.exists(file_path):
+        return {"status": "file not found"}
+        
+    with open(file_path, "r", encoding="utf-8") as f:
+        lines = f.read().splitlines()
+        
+    if not lines: return {"status": "deleted"}
+    
+    # เก็บ Header ไว้
+    header = lines[0]
+    new_lines = [header]
+    
+    # กรองแถวที่ key (ชื่อไฟล์เสียง) ตรงกันทิ้งไป
+    for line in lines[1:]:
+        if not line.strip(): continue
+        parts = line.split('\t')
+        # parts[0] คือชื่อไฟล์เสียงใน TSV
+        if parts[0] != req.key:
+            new_lines.append(line)
+            
+    # เขียนไฟล์ทับ
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(new_lines))
+
+    return {"status": "deleted"}
 
 if __name__ == "__main__":
     import uvicorn
