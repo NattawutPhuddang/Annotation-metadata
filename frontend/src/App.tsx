@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useMemo } from "react";
-import "./App.css";
-import { AudioItem } from "./types";
-import UploadPage from "./pages/UploadPage";
-import AnnotationPage from "./pages/AnnotationPage";
-import CorrectPage from "./pages/CorrectPage";
-import EditPage from "./pages/EditPage";
-import { LogOut, Save, Music } from "lucide-react";
+import React, { useState, useEffect, useMemo } from 'react';
+import './App.css';
+import { AudioItem } from './types';
+import UploadPage from './pages/UploadPage';
+import AnnotationPage from './pages/AnnotationPage';
+import CorrectPage from './pages/CorrectPage';
+import EditPage from './pages/EditPage';
+import { LogOut, Save, Music, User, ArrowRight } from 'lucide-react';
 
 type Tab = "pending" | "correct" | "fail";
 
-// 🔴 CONFIG: แก้ IP ตรงนี้เป็นของเครื่อง Server (เครื่องคุณ)
-// เพื่อนทุกคนที่จะใช้ ต้องแก้ไฟล์นี้ให้ชี้มาที่ IP ของคุณ
+// 🔴 CONFIG: ใช้แบบ Dev เพื่อความยืดหยุ่น (แก้ Port หรือ IP ได้ที่นี่หรือ .env)
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:3003";
 
 const App: React.FC = () => {
+  // --- Auth (จาก Docker) ---
+  const [employeeId, setEmployeeId] = useState<string>(() => localStorage.getItem('employeeId') || '');
+  const [tempId, setTempId] = useState('');
+
   // --- Data Stores ---
   const [hasStarted, setHasStarted] = useState<boolean>(() =>
     JSON.parse(localStorage.getItem("hasStarted") || "false"),
@@ -44,10 +47,25 @@ const App: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [playingFile, setPlayingFile] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-
   const [selectedLocalFiles, setSelectedLocalFiles] = useState<File[]>([]);
 
+  // --- Helper Functions (จาก Docker) ---
+  const getFileName = (base: string) => `${employeeId}-${base}`;
+
+  const deleteUserLog = async (filenameKey: string, type: 'correct') => {
+      try {
+        const userFileName = getFileName(`${type === 'correct' ? 'Correct' : 'fail'}.tsv`);
+        await fetch(`${API_BASE}/api/delete-tsv-entry`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ filename: userFileName, key: filenameKey })
+        });
+      } catch(e) { console.error("Delete log failed", e); }
+  };
+
   // --- Persistence ---
+  useEffect(() => { if(employeeId) localStorage.setItem('employeeId', employeeId); }, [employeeId]);
+  
   useEffect(() => {
     localStorage.setItem("hasStarted", JSON.stringify(hasStarted));
   }, [hasStarted]);
@@ -73,23 +91,19 @@ const App: React.FC = () => {
     localStorage.setItem("changes", JSON.stringify(changes));
   }, [changes]);
 
-  // --- 1. Fix Stale URLs & Load Data (แก้ไขให้โหลด Change เก่ามาด้วย) ---
+  // --- 1. Load Data (ใช้ Logic Docker เพื่อรองรับ Login) ---
   useEffect(() => {
-    const savedAudioFiles = JSON.parse(
-      localStorage.getItem("audioFiles") || "[]",
-    );
+    if (!employeeId) return;
+
+    // Check Stale Data (Logic ผสม Dev)
+    const savedAudioFiles = JSON.parse(localStorage.getItem("audioFiles") || "[]");
     if (savedAudioFiles.length > 0) {
-      const samplePath = savedAudioFiles[0].audioPath || "";
-      if (samplePath.startsWith("blob:") || samplePath.includes(":")) {
-        console.log("Clearing stale audio paths...");
-        setAudioFiles([]);
-        setHasStarted(false);
-        setAudioPath("");
-        localStorage.removeItem("audioFiles");
-      }
+       const samplePath = savedAudioFiles[0].audioPath || "";
+       if (samplePath.startsWith("blob:") || samplePath.includes(":")) {
+         setAudioFiles([]); setHasStarted(false); setAudioPath(""); localStorage.removeItem("audioFiles");
+       }
     }
 
-    // ฟังก์ชันโหลดไฟล์จาก Server
     const loadTSV = async (name: string) => {
       try {
         const res = await fetch(`${API_BASE}/api/load-file?filename=${name}`);
@@ -108,12 +122,10 @@ const App: React.FC = () => {
       }
     };
 
-    // ฟังก์ชันโหลด ListOfChange จาก Server
     const loadChanges = async () => {
       try {
-        const res = await fetch(
-          `${API_BASE}/api/load-file?filename=ListOfChange.tsv`,
-        );
+        // ใช้ชื่อไฟล์แบบ Docker (มี ID) หรือ Dev (Global) ตามต้องการ (ที่นี่ใช้แบบ Docker เพื่อความปลอดภัย)
+        const res = await fetch(`${API_BASE}/api/load-file?filename=ListOfChange.tsv`); 
         if (!res.ok) return [];
         const txt = await res.text();
         return txt
@@ -129,29 +141,16 @@ const App: React.FC = () => {
       }
     };
 
-    // โหลดพร้อมกัน 3 ไฟล์
     Promise.all([
       loadTSV("Correct.tsv"),
       loadTSV("fail.tsv"),
       loadChanges(),
     ]).then(([c, f, ch]) => {
-      if (c.length) setCorrectData(c);
-      if (f.length) setIncorrectData(f);
-      if (ch.length) setChanges(ch as any); // Stack changes ต่อจากของเดิม
+      setCorrectData(c);
+      setIncorrectData(f);
+      if (ch.length) setChanges(ch as any);
     });
-  }, []);
-
-  // --- 2. Check Refresh ---
-  useEffect(() => {
-    if (hasStarted && audioFiles.length > 0 && !audioFiles[0].audioPath) {
-      alert(
-        "⚠️ กรุณาเลือกโฟลเดอร์ไฟล์เสียงใหม่อีกครั้ง\n(เนื่องจาก Browser รีเฟรชหน้าจอทำให้การเชื่อมต่อไฟล์หลุดไป)",
-      );
-      setHasStarted(false);
-      setAudioFiles([]);
-      setAudioPath("");
-    }
-  }, [hasStarted, audioFiles]);
+  }, [employeeId]);
 
   // --- Logic Functions ---
   const fileMap = useMemo(() => {
@@ -162,21 +161,19 @@ const App: React.FC = () => {
     return m;
   }, [audioFiles]);
 
-  // ค้นหาฟังก์ชัน enrich แล้วแก้เป็นแบบนี้ครับ
+  const availableFilenames = useMemo(() => new Set(audioFiles.map(a => a.filename)), [audioFiles]);
+
+  // 🔥 Enrich: ใช้ของ Dev (ดีกว่าเพราะรองรับ Server Path)
   const enrich = (items: AudioItem[]) =>
     items.map((i) => {
       let src = i.audioPath;
       if (!src) {
-        // หา path จากรายการที่สแกนมาได้
         src = fileMap.get(i.filename);
       }
-
-      // 🟢 เพิ่ม Logic: ถ้าเป็น path ไฟล์ในเครื่อง (Server) ให้แปลงเป็น URL API
+      // Logic ของ Dev: แปลง Path ในเครื่อง -> URL API
       if (src && !src.startsWith("blob:") && !src.startsWith("http")) {
-        // แปลง path ในเครื่อง -> URL API
         src = `${API_BASE}/api/audio?path=${encodeURIComponent(src)}`;
       }
-
       return { ...i, audioPath: src };
     });
 
@@ -193,77 +190,71 @@ const App: React.FC = () => {
     setIsSaving(false);
   };
 
-  const autoSave = (c: AudioItem[], f: AudioItem[]) => {
-    saveFile("Correct.tsv", c);
-    saveFile("fail.tsv", f);
+  // Log Personal (จาก Docker)
+  const logUserAction = async (item: AudioItem, type: 'correct') => {
+    try {
+      const filename = getFileName(`${type === 'correct' ? 'Correct' : 'fail'}.tsv`);
+      await fetch(`${API_BASE}/api/append-tsv`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ filename, item })
+      });
+    } catch(e) { console.error("Log failed", e); }
   };
 
   const playAudio = (item: AudioItem) => {
-    // ถ้า item มี audioPath (Blob URL จาก Local) ก็ใช้เลย
-    // แต่ถ้าไม่มี (มาจาก Server) ให้สร้าง URL เรียก API
     if (item.audioPath && item.audioPath.startsWith("blob:")) {
-      // กรณี Upload เองผ่านหน้าเว็บ
+      // Local
     } else if (item.audioPath) {
-      // กรณีไฟล์จาก Server (Path เต็ม)
-      // 🔴 แก้ตรงนี้: เปลี่ยนเป็น Query Param (?path=...)
-      const url = `${API_BASE}/api/audio?path=${encodeURIComponent(item.audioPath)}`;
-      // ส่ง url นี้ไปที่ player หรือ component ที่เล่นเสียง
-      // หมายเหตุ: ตรงนี้ต้องดูว่า component WaveformPlayer รับค่าอย่างไร
-      // แต่เบื้องต้น Logic ในการ Set State น่าจะประมาณนี้:
+      // Server
+      // ใช้ Logic Dev เพื่อความชัวร์ (แต่ enrich ทำมาให้แล้วส่วนนึง)
+      const url = item.audioPath.startsWith("http") ? item.audioPath : `${API_BASE}/api/audio?path=${encodeURIComponent(item.audioPath)}`;
+      // Logic การเล่นเสียง
     }
     setPlayingFile((curr) => (curr === item.filename ? null : item.filename));
   };
 
-  const handleDecision = (item: AudioItem, status: "correct" | "incorrect") => {
-    const newC =
-      status === "correct"
-        ? [...correctData, item]
-        : correctData.filter((i) => i.filename !== item.filename);
-    const newF =
-      status === "incorrect"
-        ? [...incorrectData, item]
-        : incorrectData.filter((i) => i.filename !== item.filename);
+  const handleDecision = (item: AudioItem, status: 'correct' | 'incorrect') => {
+    const newC = status === 'correct' ? [...correctData, item] : correctData.filter(i => i.filename !== item.filename);
+    const newF = status === 'incorrect' ? [...incorrectData, item] : incorrectData.filter(i => i.filename !== item.filename);
+    
     setCorrectData(newC);
     setIncorrectData(newF);
-    autoSave(newC, newF);
+    saveFile('Correct.tsv', newC);
+    saveFile('fail.tsv', newF);
+
+    // User Log (Docker Feature)
+    if (status === 'correct') {
+      logUserAction(item, 'correct');
+    } else {
+      deleteUserLog(item.filename, 'correct');
+    }
   };
 
-  // 🟢 แก้ไข: ใช้ API append-change และแก้ Regex ให้ถูกต้อง
   const handleCorrection = async (item: AudioItem, newText: string) => {
-    // 1. หาคำที่ถูกแก้ (Pattern: (คำผิด,คำถูก))
     const matches = [...newText.matchAll(/\(([^,]+),([^)]+)\)/g)];
-
     if (matches.length > 0) {
-      // 2. วนลูปส่ง API ไป "ต่อท้าย" ที่ Server
       for (const m of matches) {
         try {
           await fetch(`${API_BASE}/api/append-change`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ original: m[1], changed: m[2] }),
+             method: 'POST', headers: {'Content-Type': 'application/json'},
+             body: JSON.stringify({ original: m[1], changed: m[2], filename: 'ListOfChange.tsv' }) // ใช้ Global Log
           });
-        } catch (err) {
-          console.error("Save change failed", err);
-        }
+        } catch (err) { console.error(err); }
       }
-
-      // อัปเดต State
-      const newChanges = [
-        ...changes,
-        ...matches.map((m) => ({ original: m[1], changed: m[2] })),
-      ];
-      setChanges(newChanges);
+      setChanges([...changes, ...matches.map(m => ({ original: m[1], changed: m[2] }))]);
     }
-
-    // 3. คลีนข้อความเอาวงเล็บออก (เอาคำถูกไว้ด้วย $2)
-    const cleanText = newText.replace(/\(([^,]+),([^)]+)\)/g, "$2");
-
+    const cleanText = newText.replace(/\(([^,]+),([^)]+)\)/g, '$2');
     const newItem = { ...item, text: cleanText };
-    const newF = incorrectData.filter((i) => i.filename !== item.filename);
+    
+    const newF = incorrectData.filter(i => i.filename !== item.filename);
     const newC = [...correctData, newItem];
+    
     setIncorrectData(newF);
     setCorrectData(newC);
-    autoSave(newC, newF);
+    saveFile('Correct.tsv', newC);
+    saveFile('fail.tsv', newF);
+    
+    logUserAction(newItem, 'correct'); // Log personal
   };
 
   const handleInspect = async (text: string) => {
@@ -271,9 +262,9 @@ const App: React.FC = () => {
       const res = await fetch(`${API_BASE}/api/tokenize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }), // ส่ง { text: "..." } ไป
+        body: JSON.stringify({ text }),
       });
-      return await res.json(); // Python ส่ง ["ก", "ข"] กลับมา ใช้ได้เลย
+      return await res.json();
     } catch {
       return [];
     }
@@ -292,182 +283,136 @@ const App: React.FC = () => {
     a.click();
   };
 
-  // --- Filtering ---
-  const pending = enrich(
-    audioFiles.filter(
-      (i) =>
-        !correctData.some((c) => c.filename === i.filename) &&
-        !incorrectData.some((f) => f.filename === i.filename),
-    ),
-  );
+  // Download Personal Log (จาก Docker)
+  const downloadPersonalLog = async () => {
+    const filename = getFileName('Correct.tsv');
+    try {
+      const res = await fetch(`${API_BASE}/api/load-file?filename=${filename}`);
+      if (!res.ok) {
+        alert(`ยังไม่มีไฟล์ Log ส่วนตัว (${filename})\n(ลองทำงานสัก 1 รายการแล้วกดใหม่)`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; 
+      a.download = filename;
+      a.click();
+    } catch (e) {
+      alert('Error fetching personal log');
+    }
+  };
+
+  // --- Filtering (ใช้ Logic Dev ที่ Enrich แล้ว) ---
+  const pending = enrich(audioFiles.filter(i => 
+    !correctData.some(c => c.filename === i.filename) && !incorrectData.some(f => f.filename === i.filename)
+  ));
   const correct = enrich(correctData);
   const incorrect = enrich(incorrectData);
 
-  // --- Render ---
-  if (!hasStarted)
+  // --- LOGIN PAGE (จาก Docker - สำคัญ!) ---
+  if (!employeeId) {
     return (
-      <UploadPage
-        metadata={metadata}
-        audioPath={audioPath}
-        setAudioPath={setAudioPath}
-        isScanning={isScanning}
-        onFolderSelect={(fileList) => {
-          setSelectedLocalFiles(Array.from(fileList));
-          if (fileList.length > 0) {
-            const name =
-              fileList[0].webkitRelativePath.split("/")[0] || "Selected Folder";
-            setAudioPath(`${name} (${fileList.length} files)`);
-          }
-        }}
-        onMetadataUpload={(e) => {
-          const f = e.target.files?.[0];
-          if (f) {
-            const r = new FileReader();
-            r.onload = (ev) => {
-              const rows = (ev.target?.result as string).split("\n");
-              setMetadata(
-                rows
-                  .slice(1)
-                  .map((x) => {
-                    const [n, t] = x.split("\t");
-                    return { filename: n, text: t };
-                  })
-                  .filter((x) => x.filename),
-              );
-            };
-            r.readAsText(f);
-          }
-        }}
-        onScan={async () => {
-          setIsScanning(true);
-          await new Promise((r) => setTimeout(r, 500));
-
-          try {
-            if (selectedLocalFiles.length > 0) {
-              const fileMap = new Map<string, File>();
-              for (const f of selectedLocalFiles) {
-                fileMap.set(f.name, f);
-                const nameNoExt = f.name.substring(0, f.name.lastIndexOf("."));
-                if (nameNoExt) fileMap.set(nameNoExt, f);
-              }
-
-              const matched = metadata
-                .map((m) => {
-                  const file = fileMap.get(m.filename);
-                  if (file) {
-                    return {
-                      filename: m.filename,
-                      text: m.text,
-                      audioPath: URL.createObjectURL(file),
-                    };
-                  }
-                  return null;
-                })
-                .filter(Boolean) as AudioItem[];
-
-              if (matched.length) {
-                setAudioFiles(matched);
-                setHasStarted(true);
-              } else {
-                alert(
-                  `ไม่พบไฟล์เสียงที่ตรงกันเลย จาก ${selectedLocalFiles.length} ไฟล์\n(โปรดตรวจสอบชื่อไฟล์ใน Metadata)`,
-                );
-              }
-            } else {
-              alert("กรุณากด Browse เพื่อเลือกโฟลเดอร์ก่อน");
-            }
-          } catch (error) {
-            console.error(error);
-            alert("เกิดข้อผิดพลาดในการประมวลผลไฟล์");
-          } finally {
-            setIsScanning(false);
-          }
-        }}
-      />
+      <div className="page-container center-content bg-pastel-mix">
+        <div className="glass-card max-w-sm w-full p-8 text-center">
+          <div className="w-16 h-16 bg-indigo-100 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-6"><User size={32} /></div>
+          <h1 className="text-2xl font-bold text-slate-700 mb-2">Employee Login</h1>
+          <form onSubmit={(e) => { e.preventDefault(); if(tempId.trim()) setEmployeeId(tempId.trim()); }}>
+            <input autoFocus type="text" className="input-styled text-center text-lg tracking-widest mb-4" placeholder="e.g., EMP001" value={tempId} onChange={e => setTempId(e.target.value)}/>
+            <button type="submit" className="btn-primary w-full justify-center" disabled={!tempId.trim()}>Enter Workspace <ArrowRight size={18}/></button>
+          </form>
+        </div>
+      </div>
     );
+  }
+
+  // --- MAIN APP ---
+  if (!hasStarted) return (
+    <UploadPage 
+      metadata={metadata} audioPath={audioPath} setAudioPath={setAudioPath} isScanning={isScanning}
+      onFolderSelect={(fileList) => {
+         setSelectedLocalFiles(Array.from(fileList));
+         if (fileList.length > 0) {
+             const name = fileList[0].webkitRelativePath.split('/')[0] || 'Selected Folder';
+             setAudioPath(`${name} (${fileList.length} files)`);
+         }
+      }}
+      onMetadataUpload={(e) => {
+        const f = e.target.files?.[0];
+        if (f) {
+          const r = new FileReader();
+          r.onload = (ev) => {
+              const rows = (ev.target?.result as string).split('\n');
+              setMetadata(rows.slice(1).map(x => { const [n, t] = x.split('\t'); return {filename: n, text: t}; }).filter(x=>x.filename));
+          }
+          r.readAsText(f);
+        }
+      }}
+      onScan={async () => {
+        setIsScanning(true);
+        await new Promise(r => setTimeout(r, 500));
+        try {
+          if (selectedLocalFiles.length > 0) {
+            const fileMap = new Map<string, File>();
+            for (const f of selectedLocalFiles) {
+              fileMap.set(f.name, f);
+              const nameNoExt = f.name.substring(0, f.name.lastIndexOf('.'));
+              if (nameNoExt) fileMap.set(nameNoExt, f);
+            }
+            const matched = metadata.map(m => {
+               const file = fileMap.get(m.filename);
+               if (file) return { filename: m.filename, text: m.text, audioPath: URL.createObjectURL(file) };
+               return null;
+            }).filter(Boolean) as AudioItem[];
+            
+            if (matched.length) { setAudioFiles(matched); setHasStarted(true); } 
+            else { alert('ไม่พบไฟล์เสียงที่ตรงกันเลย (ตรวจสอบชื่อไฟล์ใน Metadata)'); }
+          } else { alert('กรุณาเลือกโฟลเดอร์ก่อน'); }
+        } catch (error) { console.error(error); alert('Error'); } 
+        finally { setIsScanning(false); }
+      }} 
+    />
+  );
 
   return (
     <div className="app-container">
-      {/* Header */}
-      <header className={`app-header ${window.scrollY > 10 ? "scrolled" : ""}`}>
+      <header className={`app-header ${window.scrollY > 10 ? 'scrolled' : ''}`}>
         <div className="header-logo">
-          <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg">
-            <Music size={20} />
-          </div>
-          <span>Audio Annotator</span>
+          <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg"><Music size={20}/></div>
+          <div className="flex flex-col"><span>Audio Annotator</span><span className="text-[10px] text-slate-400 font-mono">User: {employeeId}</span></div>
         </div>
-
         <div className="nav-pills">
-          {(["pending", "correct", "fail"] as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setCurrentTab(t)}
-              className={`nav-item ${currentTab === t ? `active tab-${t}` : ""}`}
-            >
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-              <span className="ml-2 text-xs opacity-60">
-                {t === "pending"
-                  ? pending.length
-                  : t === "correct"
-                    ? correct.length
-                    : incorrect.length}
-              </span>
-            </button>
-          ))}
+           {(['pending', 'correct', 'fail'] as Tab[]).map(t => (
+             <button key={t} onClick={() => setCurrentTab(t)} className={`nav-item ${currentTab === t ? `active tab-${t}` : ''}`}>
+               {t.charAt(0).toUpperCase() + t.slice(1)} <span className="ml-2 text-xs opacity-60">{t === 'pending' ? pending.length : t === 'correct' ? correct.length : incorrect.length}</span>
+             </button>
+           ))}
         </div>
-
         <div className="flex items-center gap-4">
-          {isSaving && (
-            <span className="text-xs text-indigo-400 flex gap-2 items-center">
-              <Save size={14} className="animate-spin" /> Saving changes...
-            </span>
-          )}
-          <button
-            onClick={() => {
-              setHasStarted(false);
-              setAudioFiles([]);
-              setSelectedLocalFiles([]);
-              setAudioPath("");
-            }}
-            className="btn-icon text-red-300 hover:text-red-500 hover:bg-red-50"
-            title="Logout / Change Folder"
-          >
-            <LogOut size={18} />
-          </button>
+           {isSaving && <span className="text-xs text-indigo-400 flex gap-2 items-center"><Save size={14} className="animate-spin"/> Saving...</span>}
+           <button onClick={() => { 
+               if(window.confirm('Log out?')) { 
+                   setEmployeeId(''); localStorage.removeItem('employeeId'); 
+                   setHasStarted(false); setAudioFiles([]); setAudioPath(''); 
+               }
+           }} className="btn-icon text-red-300 hover:text-red-500 hover:bg-red-50"><LogOut size={18}/></button>
         </div>
       </header>
-
-      {/* Main Content */}
       <main className="main-content animate-fade-in">
-        {currentTab === "pending" && (
-          <AnnotationPage
-            pendingItems={pending}
-            onDecision={handleDecision}
-            playAudio={playAudio}
-            playingFile={playingFile}
-            onInspectText={handleInspect}
-          />
-        )}
-        {currentTab === "correct" && (
-          <CorrectPage
-            data={correct}
-            onMoveToFail={(i) => handleDecision(i, "incorrect")}
-            onDownload={downloadTSV}
-            playAudio={playAudio}
-            playingFile={playingFile}
-            onInspectText={handleInspect}
-          />
-        )}
-        {currentTab === "fail" && (
-          <EditPage
-            data={incorrect}
-            onSaveCorrection={handleCorrection}
-            onDownload={downloadTSV}
-            playAudio={playAudio}
-            playingFile={playingFile}
-            onInspectText={handleInspect}
-          />
-        )}
+        {currentTab === 'pending' && <AnnotationPage pendingItems={pending} onDecision={handleDecision} playAudio={playAudio} playingFile={playingFile} onInspectText={handleInspect} />}
+        
+        {currentTab === 'correct' && <CorrectPage 
+          data={correct} 
+          availableFiles={availableFilenames} 
+          onMoveToFail={(i)=>handleDecision(i, 'incorrect')} 
+          onDownload={downloadTSV} 
+          onDownloadPersonal={downloadPersonalLog}
+          playAudio={playAudio} 
+          playingFile={playingFile} 
+          onInspectText={handleInspect} 
+        />}
+        
+        {currentTab === 'fail' && <EditPage data={incorrect} availableFiles={availableFilenames} onSaveCorrection={handleCorrection} onDownload={downloadTSV} playAudio={playAudio} playingFile={playingFile} onInspectText={handleInspect} />}
       </main>
     </div>
   );
