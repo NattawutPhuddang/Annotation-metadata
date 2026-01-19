@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Check, Download, Play, Pause, Filter, AlertCircle } from 'lucide-react';
+import { Check, Download, Play, Pause, Filter, AlertCircle, RotateCcw } from 'lucide-react';
 import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
 import { WaveformPlayer } from '../components/WaveformPlayer';
 import { TokenizedText } from '../components/TokenizedText';
+import './css/EditPage.css';
 // ไม่ต้องใช้ DownloadButton แบบ Component เพื่อความยืดหยุ่นในการจัด Layout กับปุ่ม Filter
 
 interface Props {
@@ -14,6 +15,8 @@ interface Props {
   playAudio: (item: AudioItem) => void;
   playingFile: string | null;
   onInspectText: (text: string) => Promise<string[]>;
+  edits: Record<string, string>;
+  setEdits: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -25,10 +28,11 @@ const EditPage: React.FC<Props> = ({
   onDownload, 
   playAudio, 
   playingFile, 
-  onInspectText 
+  onInspectText,
+  edits,
+  setEdits
 }) => {
   const [page, setPage] = useState(1);
-  const [edits, setEdits] = useState<Record<string, string>>({});
   const [showAllHistory, setShowAllHistory] = useState(false); // 🟢 State สำหรับ Toggle Filter
 
   // 🟢 Logic การกรอง (Features จาก Docker)
@@ -102,6 +106,7 @@ const EditPage: React.FC<Props> = ({
           <tbody>
             {items.map((item, idx) => {
               const val = edits[item.filename] ?? item.text;
+              const isModified = val !== item.text;
               const isPlaying = playingFile === item.filename;
               const hasAudio = availableFiles.has(item.filename); // เช็คไฟล์จริง
 
@@ -143,15 +148,24 @@ const EditPage: React.FC<Props> = ({
                   <td className="align-top pt-4">
                     <div className="mb-4">
                       <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block tracking-wider">Edit Text</label>
-                      <textarea
-                        className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-300 transition-all font-mono text-base leading-relaxed"
-                        style={{ width: '530px', height: '45px', resize: 'none' }}
-                        value={val}
-                        onChange={e => setEdits(prev => ({...prev, [item.filename]: e.target.value}))}
-                        onKeyDown={e => handleKey(e, item.filename, val)}
-                        placeholder="Type correction here..."
-                        spellCheck={false}
-                      />
+                      <div className="edit-wrapper">
+                        <textarea
+                          className="edit-textarea"
+                          value={val}
+                          onChange={e => setEdits(prev => ({...prev, [item.filename]: e.target.value}))}
+                          onKeyDown={e => handleKey(e, item.filename, val)}
+                          placeholder="Type correction here..."
+                          spellCheck={false}
+                        />
+                        <button 
+                          className={`btn-reset ${isModified ? 'visible' : ''}`}
+                          onClick={() => setEdits(prev => { const c={...prev}; delete c[item.filename]; return c; })}
+                          title="Reset to original"
+                          disabled={!isModified}
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      </div>
                     </div>
                     
                     <div>
@@ -165,7 +179,7 @@ const EditPage: React.FC<Props> = ({
                   </td>
                   <td className="text-center align-middle">
                     <button 
-                      onClick={() => { onSaveCorrection(item, val); setEdits(p => { const c={...p}; delete c[item.filename]; return c; }); }} 
+                      onClick={() => onSaveCorrection(item, val)} 
                       className="btn-icon bg-indigo-50 text-indigo-600 hover:bg-indigo-500 hover:text-white w-10 h-10 shadow-sm hover:shadow-md"
                       title="Save Correction"
                     >

@@ -44,6 +44,9 @@ const App: React.FC = () => {
   const [changes, setChanges] = useState<Array<{ original: string; changed: string }>>(() => 
     JSON.parse(localStorage.getItem("changes") || "[]")
   );
+  const [tempEdits, setTempEdits] = useState<Record<string, string>>(() => 
+    JSON.parse(localStorage.getItem("tempEdits") || "{}")
+  );
 
   // --- Performance State (จาก List-UI) ---
   const [isLoading, setIsLoading] = useState(false);
@@ -93,6 +96,7 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem("correctData", JSON.stringify(correctData)); }, [correctData]);
   useEffect(() => { localStorage.setItem("incorrectData", JSON.stringify(incorrectData)); }, [incorrectData]);
   useEffect(() => { localStorage.setItem("changes", JSON.stringify(changes)); }, [changes]);
+  useEffect(() => { localStorage.setItem("tempEdits", JSON.stringify(tempEdits)); }, [tempEdits]);
 
   // --- 1. Load Data (Logic ผสม: รอ Login ก่อนค่อยโหลด) ---
   useEffect(() => {
@@ -259,6 +263,12 @@ const App: React.FC = () => {
     saveFile('fail.tsv', newF);
     
     logUserAction(newItem, 'correct'); // Log personal
+
+    setTempEdits(prev => {
+      const next = { ...prev };
+      delete next[item.filename];
+      return next;
+    });
   };
 
   const handleInspect = async (text: string) => {
@@ -525,7 +535,8 @@ const App: React.FC = () => {
             playingFile={playingFile}
             availableFiles={availableFilenames}
             onInspectText={handleInspect}
-            // availableFiles={availableFilenames} // ถ้า EditPage ต้องการใช้
+            edits={tempEdits}
+            setEdits={setTempEdits}
           />
         )}
       </main>
