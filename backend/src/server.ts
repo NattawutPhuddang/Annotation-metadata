@@ -36,16 +36,15 @@ const tokenizeText = async (text: string): Promise<string[]> => {
   // 🟢 จุดที่แก้: เรียกไปที่ Python Service
   try {
     const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
-    const response = await fetch(`${pythonUrl}/tokenize`, { 
+    const response = await fetch(`${pythonUrl}/api/tokenize`, { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
     });
     
     if (response.ok) {
-      // ✅ แก้ตรงนี้: Cast ให้เป็น Type ที่เรารู้จัก (หรือใช้ any)
-      const data = (await response.json()) as { tokens: string[] }; 
-      return data.tokens;
+      const tokens = await response.json() as string[];
+      return tokens;
     }
   } catch (error) {
     console.error("Python NLP service error, falling back to JS:", error);
@@ -71,12 +70,7 @@ app.post('/api/tokenize', async (req, res) => { // ใส่ async
   } catch (e) { res.json([]); }
 });
 
-app.post('/api/tokenize', (req, res) => {
-  try {
-    const { text } = req.body;
-    res.json(tokenizeText(text || ''));
-  } catch (e) { res.json([]); }
-});
+
 
 app.get('/api/load-file', (req, res) => {
   const filename = req.query.filename as string;

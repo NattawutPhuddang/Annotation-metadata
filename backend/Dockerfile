@@ -1,11 +1,11 @@
-# ใช้ Python 3.9 แบบเบาๆ
-FROM python:3.9-slim
+# ใช้ Node.js 18 แบบเบาๆ
+FROM node:18-alpine
 
 WORKDIR /app
 
 # ติดตั้ง dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY package*.json ./
+RUN npm install
 
 # ก๊อปปี้โค้ดทั้งหมด
 COPY . .
@@ -13,8 +13,11 @@ COPY . .
 # สร้างโฟลเดอร์ data รอไว้
 RUN mkdir -p data
 
+# Build TypeScript
+RUN npm run build
+
 # เปิด Port 3003
 EXPOSE 3003
 
 # คำสั่งรัน Server
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3003"]
+CMD ["npm", "start"]
