@@ -155,7 +155,7 @@ const EditPage: React.FC<Props> = ({
                     </div>
                     
                     <div>
-                          <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block tracking-wider">Inspect Tokens</label>
+                          <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block tracking-wider"></label>
                           <TokenizedText 
                             text={val} 
                             onInspect={onInspectText} 
