@@ -125,12 +125,15 @@ body {
 }
 
 .minimal-card {
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-soft);
+  box-shadow: 
+    0 10px 30px -5px rgba(0, 0, 0, 0.05),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
   padding: 0.5rem; /* Padding for the inner table */
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
 /* --- Table Styling (Floating Rows) --- */
@@ -164,7 +167,9 @@ body {
 .custom-table td:last-child { border-right: 1px solid var(--border); border-top-right-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); }
 
 .row-hover:hover td {
-  background-color: #fafafa;
+  background-color: rgba(248, 250, 252, 0.8);
+  transform: scale(1.002);
+  transition: all 0.2s ease;
 }
 
 /* --- Buttons --- */
@@ -371,4 +376,94 @@ body {
 /* Utility */
 .hidden {
   display: none;
+}
+
+/* --- Custom Scrollbar & Polish --- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+/* --- Download Button Custom Styles --- */
+.btn-download {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 99px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  box-shadow: none;
+}
+
+.btn-download svg {
+  transition: transform 0.3s ease;
+}
+
+.btn-download:hover {
+  transform: translateY(-2px);
+}
+
+.btn-download:hover svg {
+  transform: scale(1.1);
+}
+
+.btn-download:active {
+  transform: scale(0.96);
+}
+
+/* Variants */
+.btn-download-success {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+  border-color: var(--success-soft);
+}
+.btn-download-success:hover {
+  background-color: var(--success-soft);
+  border-color: var(--success);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-download-danger {
+  background-color: var(--danger-bg);
+  color: var(--danger-text);
+  border-color: var(--danger-soft);
+}
+.btn-download-danger:hover {
+  background-color: var(--danger-soft);
+  border-color: var(--danger);
+  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn-download-primary {
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  border-color: var(--primary-soft);
+}
+.btn-download-primary:hover {
+  background-color: var(--primary-soft);
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  transform: translateY(-1px);
 }

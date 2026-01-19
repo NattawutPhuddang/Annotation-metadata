@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -11,7 +14,7 @@ if (!fs.existsSync(DATA_DIR)) {
 const getFilePath = (filename: string) => path.join(DATA_DIR, filename);
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3003;
 
 app.use(cors());
 app.use(express.json());
