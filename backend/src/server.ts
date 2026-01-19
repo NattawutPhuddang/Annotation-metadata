@@ -19,10 +19,41 @@ const PORT = process.env.PORT || 3003;
 app.use(cors());
 app.use(express.json());
 
-const thaiSegmenter = new Intl.Segmenter('th', { granularity: 'word' });
-const tokenizeText = (text: string): string[] => {
+// const thaiSegmenter = new Intl.Segmenter('th', { granularity: 'word' });
+// const tokenizeText = (text: string): string[] => {
+//   if (!text) return [];
+//   try {
+//     return Array.from(thaiSegmenter.segment(text))
+//       .filter((seg) => seg.isWordLike)
+//       .map((seg) => seg.segment);
+//   } catch (error) {
+//     return text.trim().split(/\s+/);
+//   }
+// };
+const tokenizeText = async (text: string): Promise<string[]> => {
   if (!text) return [];
+  
+  // 🟢 จุดที่แก้: เรียกไปที่ Python Service
   try {
+    const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    const response = await fetch(`${pythonUrl}/tokenize`, { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    
+    if (response.ok) {
+      // ✅ แก้ตรงนี้: Cast ให้เป็น Type ที่เรารู้จัก (หรือใช้ any)
+      const data = (await response.json()) as { tokens: string[] }; 
+      return data.tokens;
+    }
+  } catch (error) {
+    console.error("Python NLP service error, falling back to JS:", error);
+  }
+
+  // Fallback: ใช้ JS ตัดคำถ้า Python พัง
+  try {
+    const thaiSegmenter = new Intl.Segmenter('th', { granularity: 'word' });
     return Array.from(thaiSegmenter.segment(text))
       .filter((seg) => seg.isWordLike)
       .map((seg) => seg.segment);
@@ -30,6 +61,15 @@ const tokenizeText = (text: string): string[] => {
     return text.trim().split(/\s+/);
   }
 };
+
+// ⚠️ อย่าลืมแก้จุดที่เรียกใช้ tokenizeText ให้ใส่ await ด้วย
+app.post('/api/tokenize', async (req, res) => { // ใส่ async
+  try {
+    const { text } = req.body;
+    const tokens = await tokenizeText(text || ''); // ใส่ await
+    res.json(tokens);
+  } catch (e) { res.json([]); }
+});
 
 app.post('/api/tokenize', (req, res) => {
   try {
@@ -180,5 +220,5 @@ app.post('/api/append-change', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running: http://localhost:${PORT}`);
+  console.log(`Server running: http://10.2.98.118:3003:${PORT}`);
 });

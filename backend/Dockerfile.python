@@ -1,0 +1,14 @@
+# audio-annotation/backend/Dockerfile.python
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# ลง dependencies ของ Python (เช่น fastapi, pythainlp, uvicorn)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ก๊อปปี้โค้ดทั้งหมด
+COPY . .
+
+# สั่งรัน Python Server ที่ Port 5000 (เพื่อไม่ให้ชนกับ Node 3003)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]

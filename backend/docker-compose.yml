@@ -1,13 +1,23 @@
 version: '3.8'
 services:
+  # 🟢 Service 1: Node.js (Main Backend)
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile # ใช้ Dockerfile ของ Node ที่แก้ไปก่อนหน้านี้
     ports:
       - "3003:3003"
     volumes:
-      # 🟢 บรรทัดนี้คือหัวใจสำคัญ!
-      # ซ้าย (./data) = โฟลเดอร์ในเครื่องคุณ
-      # ขวา (/app/data) = โฟลเดอร์ใน Docker ที่เราแก้โค้ดไปชี้เมื่อกี้
-      - ./data:/app/data 
+      - ./data:/app/data
     environment:
-      - PORT=3003
+      - PYTHON_API_URL=http://python_nlp:5000 # บอก Node ว่า Python อยู่ไหน
+    depends_on:
+      - python_nlp
+
+  # 🟢 Service 2: Python (NLP Tokenizer)
+  python_nlp:
+    build:
+      context: .
+      dockerfile: Dockerfile.python # ใช้ Dockerfile.python ที่เพิ่งสร้าง
+    ports:
+      - "5000:5000"

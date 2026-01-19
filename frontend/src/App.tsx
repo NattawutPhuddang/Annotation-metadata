@@ -10,7 +10,7 @@ import { LogOut, Save, Music, User, ArrowRight } from 'lucide-react';
 type Tab = "pending" | "correct" | "fail";
 
 // 🔴 CONFIG: ใช้แบบ Dev เพื่อความยืดหยุ่น (แก้ Port หรือ IP ได้ที่นี่หรือ .env)
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:3003";
+const API_BASE = process.env.REACT_APP_API_URL || "http://10.2.98.118:3003";
 
 const App: React.FC = () => {
   // --- Auth (จาก Docker) ---
