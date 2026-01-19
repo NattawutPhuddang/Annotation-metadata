@@ -1,21 +1,20 @@
-# audio-annotation/backend/Dockerfile
-FROM node:18-alpine
+# ใช้ Python 3.9 แบบเบาๆ
+FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy เฉพาะไฟล์ package เพื่อ install dependencies ก่อน (Cache layer)
-COPY package*.json ./
-RUN npm install
+# ติดตั้ง dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy โค้ดทั้งหมด
+# ก๊อปปี้โค้ดทั้งหมด
 COPY . .
 
-# สร้างไฟล์ TSV เปล่าๆ ไว้ถ้ายังไม่มี (ป้องกัน Error)
-RUN touch Correct.tsv fail.tsv ListOfChange.tsv
+# สร้างโฟลเดอร์ data รอไว้
+RUN mkdir -p data
 
-# Compile TypeScript
-RUN npm run build
-
+# เปิด Port 3003
 EXPOSE 3003
 
-CMD ["node", "dist/server.js"]
+# คำสั่งรัน Server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3003"]
