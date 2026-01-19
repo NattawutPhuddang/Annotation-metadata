@@ -4,6 +4,7 @@ import { AudioItem } from '../types';
 import { Pagination } from '../components/Pagination';
 import { WaveformPlayer } from '../components/WaveformPlayer';
 import { TokenizedText } from '../components/TokenizedText';
+// ไม่ต้องใช้ DownloadButton แบบ Component เพื่อความยืดหยุ่นในการจัด Layout กับปุ่ม Filter
 
 interface Props {
   data: AudioItem[];
@@ -17,12 +18,20 @@ interface Props {
 
 const ITEMS_PER_PAGE = 10;
 
-const EditPage: React.FC<Props> = ({ data, availableFiles, onSaveCorrection, onDownload, playAudio, playingFile, onInspectText }) => {
+const EditPage: React.FC<Props> = ({ 
+  data, 
+  availableFiles, 
+  onSaveCorrection, 
+  onDownload, 
+  playAudio, 
+  playingFile, 
+  onInspectText 
+}) => {
   const [page, setPage] = useState(1);
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [showAllHistory, setShowAllHistory] = useState(false); // 🟢 Toggle Filter
+  const [showAllHistory, setShowAllHistory] = useState(false); // 🟢 State สำหรับ Toggle Filter
 
-  // 🟢 Logic การกรอง
+  // 🟢 Logic การกรอง (Features จาก Docker)
   const displayData = showAllHistory 
     ? data 
     : data.filter(d => availableFiles.has(d.filename));
@@ -49,14 +58,15 @@ const EditPage: React.FC<Props> = ({ data, availableFiles, onSaveCorrection, onD
 
   return (
     <div className="animate-fade-in">
+      {/* --- Header Toolbar (ใช้แบบ Docker เพื่อให้มีปุ่ม Filter) --- */}
       <div className="flex justify-between items-center mb-6 px-2">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-bold text-danger">Needs Correction</h2>
           <span className="px-2 py-1 bg-danger-bg text-danger text-xs font-bold rounded-full">{displayData.length}</span>
         </div>
-
+        
         <div className="flex gap-3">
-           {/* 🟢 Toggle Filter Button */}
+           {/* 🟢 Toggle Filter Button Group */}
            <div className="bg-slate-100 p-1 rounded-lg flex gap-1">
               <button 
                 onClick={() => { setShowAllHistory(false); setPage(1); }}
@@ -72,6 +82,7 @@ const EditPage: React.FC<Props> = ({ data, availableFiles, onSaveCorrection, onD
               </button>
            </div>
 
+           {/* ปุ่ม Download */}
            <button onClick={() => onDownload(displayData, 'fail.tsv')} className="btn-icon w-auto px-4 gap-2 text-sm bg-danger text-white hover:bg-rose-600 shadow-none">
              <Download size={16}/> Download TSV
            </button>
@@ -92,7 +103,7 @@ const EditPage: React.FC<Props> = ({ data, availableFiles, onSaveCorrection, onD
             {items.map((item, idx) => {
               const val = edits[item.filename] ?? item.text;
               const isPlaying = playingFile === item.filename;
-              const hasAudio = availableFiles.has(item.filename);
+              const hasAudio = availableFiles.has(item.filename); // เช็คไฟล์จริง
 
               return (
                 <tr key={item.filename} className={`row-hover ${!hasAudio ? 'opacity-60 bg-slate-50/50' : ''}`}>
@@ -110,11 +121,12 @@ const EditPage: React.FC<Props> = ({ data, availableFiles, onSaveCorrection, onD
                               onClick={() => playAudio(item)}
                               className={`btn-icon w-8 h-8 text-danger hover:bg-rose-50 ${isPlaying ? 'bg-rose-50' : ''}`}
                             >
-                               {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5"/>}
+                              {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5"/>}
                             </button>
                           )}
                        </div>
                        
+                       {/* Waveform Player: ใช้สีแดง (rose) สำหรับหน้า Fail */}
                        {item.audioPath && hasAudio ? (
                           <div className="bg-rose-50/30 rounded-lg p-2 border border-rose-100/50">
                              <WaveformPlayer
@@ -143,12 +155,12 @@ const EditPage: React.FC<Props> = ({ data, availableFiles, onSaveCorrection, onD
                     </div>
                     
                     <div>
-                         <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block tracking-wider">Inspect Tokens</label>
-                         <TokenizedText 
+                          <label className="text-[10px] uppercase font-bold text-slate-400 mb-1 block tracking-wider">Inspect Tokens</label>
+                          <TokenizedText 
                             text={val} 
                             onInspect={onInspectText} 
                             isExpanded={false}
-                         />
+                          />
                     </div>
                   </td>
                   <td className="text-center align-middle">
