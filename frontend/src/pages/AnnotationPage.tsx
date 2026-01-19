@@ -11,11 +11,19 @@ interface Props {
   playAudio: (item: AudioItem) => void;
   playingFile: string | null;
   onInspectText: (text: string) => Promise<string[]>;
+  tokenCache: Map<string, string[]>; // 🟢 รับ Cache ที่โหลดมาแล้วจาก App.tsx
 }
 
 const ITEMS_PER_PAGE = 10;
 
-const AnnotationPage: React.FC<Props> = ({ pendingItems, onDecision, playAudio, playingFile, onInspectText }) => {
+const AnnotationPage: React.FC<Props> = ({ 
+  pendingItems, 
+  onDecision, 
+  playAudio, 
+  playingFile, 
+  onInspectText, 
+  tokenCache 
+}) => {
   const [page, setPage] = useState(1);
   const items = pendingItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
   const first = items[0];
@@ -23,7 +31,11 @@ const AnnotationPage: React.FC<Props> = ({ pendingItems, onDecision, playAudio, 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (!first) return;
-      if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); playAudio(first); }
+      // ป้องกัน Spacebar เลื่อนหน้าจอลง เมื่อกดเล่นเสียง
+      if (e.code === 'Space' && e.target === document.body) { 
+        e.preventDefault(); 
+        playAudio(first); 
+      }
       if (e.code === 'Enter') { e.preventDefault(); onDecision(first, 'correct'); }
       if (e.code === 'Backspace') { e.preventDefault(); onDecision(first, 'incorrect'); }
     };
@@ -43,18 +55,23 @@ const AnnotationPage: React.FC<Props> = ({ pendingItems, onDecision, playAudio, 
   return (
     <div className="animate-fade-in">
       <div className="minimal-card mb-8">
-        <table className="custom-table">
+        {/* 🟢 ใช้ table-fixed เพื่อแก้ปัญหาคอลัมน์ดิ้นหรือเกิน */}
+        <table className="custom-table w-full table-fixed">
           <thead>
             <tr>
               <th className="w-16 text-center">No.</th>
-              <th className="w-[40%]">Audio Source</th>
-              <th>Transcript</th>
+              <th className="w-[30%]">Audio Source</th>
+              <th className="w-[40%]">Transcript</th>
               <th className="w-32 text-center">Decision</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, idx) => {
               const isPlaying = playingFile === item.filename;
+              
+              // 🟢 ดึง Token จาก Cache มาเตรียมไว้
+              const tokens = tokenCache.get(item.text);
+
               return (
                 <tr key={item.filename} className={`row-hover ${idx === 0 && !isPlaying ? 'bg-indigo-50/30' : ''}`}>
                   <td className="text-center align-middle">
@@ -62,10 +79,10 @@ const AnnotationPage: React.FC<Props> = ({ pendingItems, onDecision, playAudio, 
                       {(page-1)*ITEMS_PER_PAGE + idx + 1}
                     </span>
                   </td>
-                  <td>
-                    <div className="flex flex-col gap-1">
-                       <div className="flex items-center justify-between">
-                          <div className="text-xs text-slate-500 font-medium truncate max-w-[250px]" title={item.filename}>
+                  <td className="align-middle">
+                    <div className="flex flex-col gap-1 pr-4"> {/* เพิ่ม padding ขวาหน่อย */}
+                       <div className="flex items-center justify-between mb-1">
+                          <div className="text-xs text-slate-500 font-medium truncate max-w-[200px]" title={item.filename}>
                             {item.filename}
                           </div>
                           <button 
@@ -82,16 +99,20 @@ const AnnotationPage: React.FC<Props> = ({ pendingItems, onDecision, playAudio, 
                             audioUrl={item.audioPath}
                             isPlaying={isPlaying}
                             onPlayChange={(p) => { if (p !== isPlaying) playAudio(item); }}
-                            progressColor="#818cf8" // Theme Color
+                            progressColor="#818cf8"
                             height="h-1.5"
                           />
                        ) : <div className="text-xs text-red-300 h-2">Audio missing</div>}
                     </div>
                   </td>
-                  <td className="align-middle">
-                    <div className={`text-token pl-4 border-l-2 ${idx===0 ? 'border-primary' : 'border-indigo-100'} py-1`}>
-                      <TokenizedText text={item.text} onInspect={onInspectText} isExpanded={idx===0}/>
-                    </div>
+                  <td className="align-middle px-2">
+                    {/* 🟢 ส่ง tokens ที่ได้จาก Cache เข้าไป (TokenizedText จะได้ไม่ต้องโหลดเอง) */}
+                    <TokenizedText 
+                      text={item.text} 
+                      onInspect={onInspectText} 
+                      isExpanded={idx===0}
+                      // tokens={tokens} // 🟢 ลบออก เพราะ TokenizedText จะจัดการ Cache เอง
+                    />
                   </td>
                   <td className="align-middle">
                     <div className="flex justify-center gap-3">
