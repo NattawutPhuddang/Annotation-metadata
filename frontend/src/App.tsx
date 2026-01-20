@@ -11,7 +11,7 @@ import DashboardPage from "./pages/DashboardPage";
 
 type Tab = "pending" | "correct" | "fail" | "dashboard";
 
-const API_BASE = process.env.REACT_APP_API_URL || "http://10.2.98.118:3003";
+const API_BASE = process.env.REACT_APP_API_URL || "http://10.2.98.160:3003";
 
 const App: React.FC = () => {
   const [employeeId, setEmployeeId] = useState<string>(
