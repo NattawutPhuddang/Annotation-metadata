@@ -5,7 +5,7 @@ import UploadPage from "./pages/UploadPage";
 import AnnotationPage from "./pages/AnnotationPage";
 import CorrectPage from "./pages/CorrectPage";
 import EditPage from "./pages/EditPage";
-import { LogOut, Save, Music, User, ArrowRight, BarChart2 } from "lucide-react";
+import { LogOut, Save, Music, User, ArrowRight, BarChart2, Moon, Sun } from "lucide-react";
 import { LoadingOverlay } from "./components/LoadingOverlay";
 import DashboardPage from "./pages/DashboardPage"; // 🟢 เพิ่มบรรทัดนี้
 
@@ -49,6 +49,9 @@ const App: React.FC = () => {
   >(() => JSON.parse(localStorage.getItem("changes") || "[]"));
   const [tempEdits, setTempEdits] = useState<Record<string, string>>(() =>
     JSON.parse(localStorage.getItem("tempEdits") || "{}"),
+  );
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => 
+    JSON.parse(localStorage.getItem("isDarkMode") || "false")
   );
 
   // --- Performance State (จาก List-UI) ---
@@ -156,6 +159,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem("tempEdits", JSON.stringify(tempEdits));
   }, [tempEdits]);
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", isDarkMode ? "dark" : "light");
+    localStorage.setItem("isDarkMode", JSON.stringify(isDarkMode));
+  }, [isDarkMode]);
 
   // --- 1. Load Data (Logic ผสม: รอ Login ก่อนค่อยโหลด) ---
   useEffect(() => {
@@ -683,6 +690,13 @@ const App: React.FC = () => {
               <Save size={14} className="animate-spin" /> Saving...
             </span>
           )}
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="btn-icon text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-slate-700"
+            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
           <button
             onClick={() => {
               if (window.confirm("Log out from workspace?")) {
