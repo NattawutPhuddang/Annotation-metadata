@@ -251,5 +251,5 @@ app.post('/api/append-change', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running: http://10.2.98.118:3003:${PORT}`);
+  console.log(`Server running: http://10.2.98.118:${PORT}`);
 });

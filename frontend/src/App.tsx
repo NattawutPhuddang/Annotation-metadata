@@ -7,9 +7,11 @@ import CorrectPage from "./pages/CorrectPage";
 import EditPage from "./pages/EditPage";
 import { LogOut, Save, Music, User, ArrowRight, BarChart2, Moon, Sun } from "lucide-react";
 import { LoadingOverlay } from "./components/LoadingOverlay";
+import DashboardPage from "./pages/DashboardPage";
 
 type Tab = "pending" | "correct" | "fail" | "dashboard";
 
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:3003";
 
 const App: React.FC = () => {
   const [employeeId, setEmployeeId] = useState<string>(
@@ -825,6 +827,7 @@ const App: React.FC = () => {
             setEdits={setTempEdits}
           />
         )}
+        {currentTab === "dashboard" && <DashboardPage apiBase={API_BASE} />}
       </main>
     </div>
   );
