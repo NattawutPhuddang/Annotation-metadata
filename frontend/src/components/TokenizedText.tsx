@@ -91,6 +91,8 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
         >
           {/* ใช้ appliedEdits มาแสดงผลแทน Text เดิม */}
           {tokens ? tokens.map((t, i) => appliedEdits[i] || t).join("") : text}
+          
+        
         </span>
         <div
           className={`flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-xl transition-all z-10 ml-4 ${expanded ? "bg-sky-100 text-sky-600" : "bg-slate-100 text-slate-400 group-hover:bg-sky-50 group-hover:text-sky-500"}`}

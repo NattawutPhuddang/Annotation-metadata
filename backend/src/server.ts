@@ -69,7 +69,51 @@ app.post('/api/tokenize', async (req, res) => { // ใส่ async
     res.json(tokens);
   } catch (e) { res.json([]); }
 });
+// 🟢 NEW: เพิ่ม Endpoint สำหรับ Batch Tokenize
+app.post('/api/tokenize-batch', async (req, res) => {
+  try {
+    const { texts } = req.body;
+    if (!texts || !Array.isArray(texts)) {
+      return res.json([]);
+    }
 
+    // 1. ลองส่งไปให้ Python Service ช่วยตัดคำ (เร็วและแม่นกว่า)
+    try {
+      const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${pythonUrl}/api/tokenize-batch`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texts })
+      });
+      
+      if (response.ok) {
+        const tokensList = await response.json();
+        return res.json(tokensList);
+      }
+    } catch (error) {
+      console.error("Python NLP batch service error, falling back to JS:", error);
+    }
+
+    // 2. Fallback: ถ้า Python ตาย ให้ใช้ JS Loop ตัดเอง (ช้ากว่าแต่กันระบบล่ม)
+    const thaiSegmenter = new Intl.Segmenter('th', { granularity: 'word' });
+    const results = texts.map(text => {
+      try {
+        if (!text) return [];
+        return Array.from(thaiSegmenter.segment(text))
+          .filter((seg) => seg.isWordLike)
+          .map((seg) => seg.segment);
+      } catch {
+        return text.trim().split(/\s+/);
+      }
+    });
+    
+    res.json(results);
+
+  } catch (e) {
+    console.error("Batch tokenize error:", e);
+    res.json([]); 
+  }
+});
 
 
 app.get('/api/load-file', (req, res) => {

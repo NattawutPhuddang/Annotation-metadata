@@ -69,7 +69,8 @@ const App: React.FC = () => {
   const suggestionMap = useMemo(() => {
     const map = new Map<string, string>();
     changes.forEach((c) => {
-      if (c.original && c.changed) map.set(c.original.trim(), c.changed.trim());
+      // if (c.original !== undefined && c.changed !== undefined) map.set(c.original.trim(), c.changed.trim());
+      if (c.original) map.set(c.original.trim(), c.changed.trim());
     });
     return map;
   }, [changes]);
