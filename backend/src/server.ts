@@ -243,11 +243,23 @@ app.post('/api/append-change', (req, res) => {
   const targetFile = filename || 'ListOfChange.tsv';
   const line = `\n${original}\t${changed}`;
   const filePath = getFilePath(targetFile);
-  
+
   fs.appendFile(filePath, line, 'utf8', (err) => {
     if (err) res.status(500).send('Error appending');
     else res.send('Appended');
   });
+});
+
+// 🟢 NEW: API เช็คเวลาการแก้ไขล่าสุดของไฟล์ (สำหรับ Smart Polling)
+app.get('/api/check-mtime', (req, res) => {
+  const filename = req.query.filename as string;
+  const filePath = getFilePath(filename);
+  if (fs.existsSync(filePath)) {
+    const mtime = fs.statSync(filePath).mtime.getTime();
+    res.json({ mtime });
+  } else {
+    res.json({ mtime: 0 });
+  }
 });
 
 app.listen(PORT, () => {
