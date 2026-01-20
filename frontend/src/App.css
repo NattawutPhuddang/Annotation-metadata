@@ -36,6 +36,61 @@
   --shadow-soft: 0 4px 20px -2px rgba(226, 232, 240, 0.6);
   --shadow-hover: 0 10px 25px -5px rgba(226, 232, 240, 0.8);
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  
+}
+
+/* 🟢 NEW: Dark Mode Variables */
+[data-theme='dark'] {
+  /* Dark Base Colors */
+  --bg-app: #0f172a; /* Slate 900 */
+  --surface: #1e293b; /* Slate 800 */
+  --text-main: #f1f5f9; /* Slate 100 */
+  --text-light: #94a3b8; /* Slate 400 */
+  --border: #334155; /* Slate 700 */
+
+  /* Adjusted Functional Colors for Dark Mode */
+  --primary-bg: #312e81; /* Indigo 900 */
+  --primary-text: #c7d2fe; /* Indigo 200 */
+  
+  --success-bg: #064e3b; /* Emerald 900 */
+  --success-text: #6ee7b7; /* Emerald 300 */
+  --success-soft: #065f46;
+
+  --danger-bg: #881337; /* Rose 900 */
+  --danger-text: #fecdd3; /* Rose 200 */
+  --danger-soft: #9f1239;
+  
+  /* Shadow adjustment */
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+}
+/* 🟢 NEW: Dark Mode Header Override */
+[data-theme='dark'] .app-header {
+  background-color: rgba(15, 23, 42, 0.85); /* Dark transparency */
+  border-bottom: 1px solid var(--border);
+}
+[data-theme='dark'] .app-header.scrolled {
+  background-color: rgba(15, 23, 42, 0.95);
+}
+
+/* 🟢 NEW: Dark Mode Card Overrides */
+[data-theme='dark'] .minimal-card {
+  background: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='dark'] .row-hover:hover td {
+  /* 👇 แก้ไขสีตรงนี้ครับ */
+  background-color: rgba(51, 65, 85, 0.5); 
+}
+[data-theme='dark'] .glass-stat {
+  background: rgba(30, 41, 59, 0.6); /* สีพื้นหลังมืดโปร่งแสง */
+  border-color: rgba(255, 255, 255, 0.1); /* เส้นขอบจางๆ */
+}
+
+[data-theme='dark'] .glass-stat:hover {
+  background: rgba(30, 41, 59, 0.9); /* เมื่อเอาเมาส์ชี้ให้ทึบขึ้น */
 }
 
 body {
@@ -394,6 +449,293 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
+}
+
+/* 🌈 Animation Keyframes */
+@keyframes rainbow-move {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes shine {
+  0% { transform: translateX(-100%) skewX(-15deg); }
+  100% { transform: translateX(200%) skewX(-15deg); }
+}
+
+/* 🏆 Rank 1 Row Styling */
+.rank-1-row {
+  /* พื้นหลังสีรุ้งพาสเทล */
+  background: linear-gradient(
+    270deg, 
+    #ff9a9e, 
+    #fecfef, 
+    #a18cd1, 
+    #fbc2eb, 
+    #8fd3f4, 
+    #84fab0
+  );
+  background-size: 400% 400%;
+  animation: rainbow-move 6s ease infinite;
+  
+  border-radius: var(--radius-md); /* มนๆ หน่อย */
+  border: none !important; /* ลบเส้นขอบเดิม */
+}
+
+/* แก้ไขให้ td ของแถวที่ 1 ไม่มีพื้นหลัง (เพื่อให้เห็นสีรุ้ง) */
+.rank-1-row td {
+  background: transparent !important;
+  border: none !important;
+  color: white !important; /* บังคับตัวหนังสือสีขาว */
+  text-shadow: 0 2px 4px rgba(0,0,0,0.1); /* เงาตัวหนังสือบางๆ ให้อ่านง่าย */
+}
+
+/* เพิ่มประกายวิบวับ (Optional) */
+.rank-1-row::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right, 
+    rgba(255,255,255,0) 0%, 
+    rgba(255,255,255,0.3) 50%, 
+    rgba(255,255,255,0) 100%
+  );
+  transform: skewX(-25deg);
+  animation: shine 3s infinite linear;
+  pointer-events: none; /* ไม่ให้บังการกด */
+}
+
+/* ปรับแต่ง Table Header ให้เข้ากัน */
+thead th {
+  background-color: transparent;
+  color: var(--text-light);
+  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+}
+
+/* Card Summary Dashboard ตกแต่งเพิ่ม */
+.dashboard-stat-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.dashboard-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
+}
+/* --- 🏆 Dashboard Podium Design --- */
+.podium-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+  padding-top: 2rem;
+}
+
+.podium-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.podium-step:hover {
+  transform: translateY(-8px);
+}
+
+.podium-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1.5rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+  margin-bottom: 1rem;
+  border: 4px solid white;
+  position: relative;
+  z-index: 10;
+}
+
+.podium-base {
+  width: 100px;
+  border-radius: 1rem 1rem 0 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 1rem;
+  color: white;
+  font-weight: 800;
+  font-size: 2rem;
+  box-shadow: 0 10px 30px -5px rgba(0,0,0,0.15);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Rank Specific Styles */
+.rank-1 .podium-base {
+  height: 160px;
+  /* Rainbow Gradient */
+  background: linear-gradient(45deg, #ff9a9e, #fad0c4, #fad0c4, #a18cd1, #fbc2eb);
+  background-size: 400% 400%;
+  animation: rainbow-move 4s ease infinite;
+}
+.rank-1 .podium-avatar {
+  border-color: #ffd700;
+  color: #ffd700;
+  transform: scale(1.2);
+}
+
+.rank-2 .podium-base {
+  height: 110px;
+  background: linear-gradient(180deg, #e2e8f0 0%, #94a3b8 100%);
+}
+.rank-2 .podium-avatar {
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+.rank-3 .podium-base {
+  height: 80px;
+  background: linear-gradient(180deg, #fce7f3 0%, #fbcfe8 100%); /* Bronze-ish pink tone */
+  background: linear-gradient(180deg, #ffedd5 0%, #fb923c 100%); /* Actual Bronze tone */
+}
+.rank-3 .podium-avatar {
+  border-color: #fdba74;
+  color: #ea580c;
+}
+
+.crown-icon {
+  position: absolute;
+  top: -35px;
+  font-size: 2.5rem;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
+  animation: bounce-slow 2s infinite;
+}
+
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+/* Glass Stat Card */
+.glass-stat {
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.5);
+  transition: all 0.3s ease;
+}
+.glass-stat:hover {
+  background: rgba(255,255,255,0.9);
+  transform: translateY(-4px);
+  box-shadow: 0 15px 30px -5px rgba(0,0,0,0.05);
+}
+/* --- 📊 Modern Stat Cards Design --- */
+.stat-card-modern {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.5rem; /* มุมมนมากหน่อย */
+  padding: 1.5rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  backdrop-filter: blur(20px);
+}
+
+.stat-card-modern:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1);
+}
+
+/* 🎨 Color Variants */
+/* Theme: Emerald (Total Items) */
+.stat-theme-emerald {
+  background: linear-gradient(145deg, rgba(236,253,245,0.8) 0%, rgba(255,255,255,0.4) 100%);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+.stat-theme-emerald .icon-wrapper {
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  box-shadow: 0 8px 16px -4px rgba(5, 150, 105, 0.3);
+}
+.stat-theme-emerald .stat-value {
+  background: linear-gradient(to right, #065f46, #047857);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Theme: Blue (Active Users) */
+.stat-theme-blue {
+  background: linear-gradient(145deg, rgba(239,246,255,0.8) 0%, rgba(255,255,255,0.4) 100%);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+.stat-theme-blue .icon-wrapper {
+  background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+  box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.3);
+}
+.stat-theme-blue .stat-value {
+  background: linear-gradient(to right, #1e40af, #1d4ed8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Theme: Orange (Avg per User) */
+.stat-theme-orange {
+  background: linear-gradient(145deg, rgba(255,247,237,0.8) 0%, rgba(255,255,255,0.4) 100%);
+  border-color: rgba(249, 115, 22, 0.2);
+}
+.stat-theme-orange .icon-wrapper {
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+  box-shadow: 0 8px 16px -4px rgba(234, 88, 12, 0.3);
+}
+.stat-theme-orange .stat-value {
+  background: linear-gradient(to right, #9a3412, #c2410c);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 🌑 Dark Mode Support */
+[data-theme='dark'] .stat-card-modern {
+  background: rgba(30, 41, 59, 0.6); /* Slate Dark */
+  border-color: rgba(255, 255, 255, 0.05);
+}
+[data-theme='dark'] .stat-theme-emerald .stat-value,
+[data-theme='dark'] .stat-theme-blue .stat-value,
+[data-theme='dark'] .stat-theme-orange .stat-value {
+  background: none;
+  -webkit-text-fill-color: #f1f5f9; /* สีขาวปกติใน Dark Mode */
+  color: #f1f5f9;
+}
+
+/* Decorative Background Icon (ลายน้ำจางๆ) */
+.stat-bg-icon {
+  position: absolute;
+  right: -20px;
+  bottom: -20px;
+  opacity: 0.05;
+  transform: rotate(-15deg);
+  pointer-events: none;
+  transition: transform 0.3s ease;
+}
+.stat-card-modern:hover .stat-bg-icon {
+  transform: rotate(0deg) scale(1.1);
+  opacity: 0.1;
+}
+
+.icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-bottom: 1rem;
 }
 
 /* --- Download Button Custom Styles --- */
