@@ -221,12 +221,12 @@ export const DashboardPage: React.FC<Props> = ({ apiBase }) => {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white
                       ${idx === 0 ? 'bg-indigo-500 shadow-indigo-200 shadow-md' : 'bg-slate-300'}
                     `}>
-                      {stat.user.charAt(0).toUpperCase()}
+                      {/* {stat.user.charAt(0).toUpperCase()} */}
                     </div>
                     <div>
                       <div className={`font-bold ${idx === 0 ? 'text-indigo-900' : 'text-slate-700'}`}>
                         {stat.user}
-                        {idx === 0 && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800">LEADER</span>}
+                        {idx === 0 && <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800"></span>}
                       </div>
                     </div>
                   </div>
