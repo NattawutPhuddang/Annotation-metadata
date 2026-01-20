@@ -218,7 +218,7 @@ const App: React.FC = () => {
       loadTSV("fail.tsv"),
       loadChanges(),
     ]).then(([c, f, ch]) => {
-      if (c.length) setCorrectData(c);
+      if (c.length) setCorrectData(c.reverse());
       if (f.length) setIncorrectData(f.reverse());
       if (ch.length) setChanges(ch as any);
     });
@@ -309,14 +309,15 @@ const App: React.FC = () => {
   };
 
   const handleDecision = (item: AudioItem, status: "correct" | "incorrect") => {
-    // 1. อัปเดต State หน้าจอ (เพื่อให้ UI ตอบสนองทันที)
+
     const newC =
       status === "correct"
-        ? [...correctData, item]
+        
+        ? [item, ...correctData] 
         : correctData.filter((i) => i.filename !== item.filename);
     const newF =
       status === "incorrect"
-        // 🟢 แก้ตรงนี้: เอา item ไว้ข้างหน้า incorrectData (แทรกบนสุด)
+        
         ? [item, ...incorrectData] 
         : incorrectData.filter((i) => i.filename !== item.filename);
 
@@ -369,7 +370,7 @@ const App: React.FC = () => {
 
     // อัปเดต State
     const newF = incorrectData.filter((i) => i.filename !== item.filename);
-    const newC = [...correctData, newItem];
+    const newC = [newItem, ...correctData];
 
     setIncorrectData(newF);
     setCorrectData(newC);
