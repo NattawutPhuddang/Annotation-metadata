@@ -648,7 +648,7 @@ const App: React.FC = () => {
 
         <div className="nav-pills">
           {/* ส่วนเดิม: ลูปสร้างปุ่ม Pending, Correct, Fail */}
-          {(["pending", "correct", "fail"] as Tab[]).map((t) => (
+          {(["pending", "fail", "correct"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setCurrentTab(t)}
