@@ -403,7 +403,7 @@ const App: React.FC = () => {
         : correctData.filter((i) => i.filename !== finalItem.filename);
     const newF =
       status === "incorrect"
-        ? [...incorrectData, finalItem]
+        ? [finalItem, ...incorrectData]
         : incorrectData.filter((i) => i.filename !== finalItem.filename);
 
     setCorrectData(newC);
