@@ -7,6 +7,7 @@ import CorrectPage from "./pages/CorrectPage";
 import EditPage from "./pages/EditPage";
 import { LogOut, Save, Music, User, ArrowRight, BarChart2, Moon, Sun } from "lucide-react";
 import { LoadingOverlay } from "./components/LoadingOverlay";
+import DashboardPage from "./pages/DashboardPage";
 
 type Tab = "pending" | "correct" | "fail" | "dashboard";
 
@@ -260,10 +261,11 @@ const App: React.FC = () => {
     // 1. โหลดข้อมูลหลักครั้งเดียว
     Promise.all([loadTSV("Correct.tsv"), loadTSV("fail.tsv")]).then(
       ([c, f]) => {
-        if (c.length) setCorrectData(c);
-        if (f.length) setIncorrectData(f);
+        if (c.length) setCorrectData(c.reverse());
+        if (f.length) setIncorrectData(f.reverse());
       },
     );
+  
 
     // 2. เรียก Sync ListOfChange ครั้งแรกทันที
     syncListOfChange();
@@ -825,6 +827,9 @@ const App: React.FC = () => {
             edits={tempEdits}
             setEdits={setTempEdits}
           />
+           )}
+        {currentTab === "dashboard" && (
+  <DashboardPage apiBase={API_BASE} />
         )}
       </main>
     </div>
