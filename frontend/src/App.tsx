@@ -7,21 +7,16 @@ import CorrectPage from "./pages/CorrectPage";
 import EditPage from "./pages/EditPage";
 import { LogOut, Save, Music, User, ArrowRight, BarChart2, Moon, Sun } from "lucide-react";
 import { LoadingOverlay } from "./components/LoadingOverlay";
-import DashboardPage from "./pages/DashboardPage"; // 🟢 เพิ่มบรรทัดนี้
 
 type Tab = "pending" | "correct" | "fail" | "dashboard";
 
-// 🔴 CONFIG: ใช้แบบ Dev เพื่อความยืดหยุ่น (แก้ Port หรือ IP ได้ที่นี่หรือ .env)
-const API_BASE = process.env.REACT_APP_API_URL || "http://10.2.98.118:3003";
 
 const App: React.FC = () => {
-  // --- Auth State (จาก Dev) ---
   const [employeeId, setEmployeeId] = useState<string>(
     () => localStorage.getItem("employeeId") || "",
   );
   const [tempId, setTempId] = useState("");
 
-  // --- Data Stores ---
   const [hasStarted, setHasStarted] = useState<boolean>(() =>
     JSON.parse(localStorage.getItem("hasStarted") || "false"),
   );
@@ -33,7 +28,6 @@ const App: React.FC = () => {
   const [audioPath, setAudioPath] = useState<string>(
     () => localStorage.getItem("audioPath") || "",
   );
-
   const [audioFiles, setAudioFiles] = useState<AudioItem[]>(() =>
     JSON.parse(localStorage.getItem("audioFiles") || "[]"),
   );
@@ -54,7 +48,6 @@ const App: React.FC = () => {
     JSON.parse(localStorage.getItem("isDarkMode") || "false")
   );
 
-  // --- Performance State (จาก List-UI) ---
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState("");
   const [tokenCache, setTokenCache] = useState<Map<string, string[]>>(
@@ -62,19 +55,44 @@ const App: React.FC = () => {
   );
   const [isScanning, setIsScanning] = useState(false);
   const [selectedLocalFiles, setSelectedLocalFiles] = useState<File[]>([]);
-
+  const [smartEdits, setSmartEdits] = useState<
+    Record<string, Record<number, string>>
+  >({});
   const [isSaving, setIsSaving] = useState(false);
   const [playingFile, setPlayingFile] = useState<string | null>(null);
-
-  // --- Helper Functions (จาก Dev) ---
+  const [lastChangeMtime, setLastChangeMtime] = useState<number>(0);
   const getFileName = (base: string) => `${employeeId}-${base}`;
+
+  // 🟢 NEW: สร้าง Map คำผิด->คำถูก เพื่อให้ค้นหาเร็วๆ (ใช้ใน AnnotationPage)
+  const suggestionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    changes.forEach((c) => {
+      if (c.original && c.changed) map.set(c.original.trim(), c.changed.trim());
+    });
+    return map;
+  }, [changes]);
+
+  // 🟢 NEW: ฟังก์ชันอัปเดตข้อความใน Memory (เมื่อกดแก้คำสีส้ม)
+  const handleUpdateText = (item: AudioItem, newText: string) => {
+    // 1. อัปเดตใน audioFiles (State หลัก)
+    setAudioFiles((prev) =>
+      prev.map((f) =>
+        f.filename === item.filename ? { ...f, text: newText } : f,
+      ),
+    );
+    // 2. ล้าง Token Cache ของคำเก่า เพื่อให้ตัดคำใหม่
+    setTokenCache((prev) => {
+      const next = new Map(prev);
+      next.delete(item.text);
+      return next;
+    });
+  };
 
   const deleteUserLog = async (filenameKey: string, type: "correct") => {
     try {
       const userFileName = getFileName(
         `${type === "correct" ? "Correct" : "fail"}.tsv`,
       );
-      // ⚠️ หมายเหตุ: Backend Python ต้องมี API นี้ด้วย
       await fetch(`${API_BASE}/api/delete-tsv-entry`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,7 +108,6 @@ const App: React.FC = () => {
       const filename = getFileName(
         `${type === "correct" ? "Correct" : "fail"}.tsv`,
       );
-      // ⚠️ หมายเหตุ: Backend Python ต้องมี API นี้ด้วย
       await fetch(`${API_BASE}/api/append-tsv`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -101,7 +118,6 @@ const App: React.FC = () => {
     }
   };
 
-  // 🟢 NEW: ฟังก์ชันสำหรับอัปเดตไฟล์ Global แบบปลอดภัย (ใช้ Append/Upsert)
   const appendToGlobal = async (filename: string, item: AudioItem) => {
     setIsSaving(true);
     try {
@@ -117,7 +133,6 @@ const App: React.FC = () => {
     }
   };
 
-  // 🟢 NEW: ฟังก์ชันสำหรับลบออกจาก Global (ใช้ API ที่มีอยู่แล้ว)
   const removeFromGlobal = async (filename: string, key: string) => {
     try {
       await fetch(`${API_BASE}/api/delete-tsv-entry`, {
@@ -130,7 +145,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Persistence ---
   useEffect(() => {
     if (employeeId) localStorage.setItem("employeeId", employeeId);
   }, [employeeId]);
@@ -164,11 +178,10 @@ const App: React.FC = () => {
     localStorage.setItem("isDarkMode", JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
-  // --- 1. Load Data (Logic ผสม: รอ Login ก่อนค่อยโหลด) ---
   useEffect(() => {
     if (!employeeId) return;
 
-    // Check Stale Data
+    // 1. ส่วน Load AudioFiles (คงเดิม)
     const savedAudioFiles = JSON.parse(
       localStorage.getItem("audioFiles") || "[]",
     );
@@ -182,6 +195,7 @@ const App: React.FC = () => {
       }
     }
 
+    // ฟังก์ชันโหลดไฟล์ TSV ปกติ (คงเดิม)
     const loadTSV = async (name: string) => {
       try {
         const res = await fetch(`${API_BASE}/api/load-file?filename=${name}`);
@@ -200,14 +214,30 @@ const App: React.FC = () => {
       }
     };
 
-    const loadChanges = async () => {
+    // ฟังก์ชันโหลดเฉพาะ ListOfChange (แยกออกมาเพื่อให้เรียกซ้ำได้)
+    const syncListOfChange = async () => {
       try {
+        // 1. เช็คเวลาก่อน (Lightweight)
+        const timeRes = await fetch(
+          `${API_BASE}/api/check-mtime?filename=ListOfChange.tsv`,
+        );
+        const timeData = await timeRes.json();
+        const serverMtime = timeData.mtime;
+
+        // 2. เทียบกับเวลาที่เราจำไว้ (ถ้าเท่ากัน คือไฟล์ไม่เปลี่ยน -> ไม่ต้องโหลด)
+        // หมายเหตุ: ใช้ ref หรือ state นอก closure ถ้ายากใช้ state check ในนี้ได้
+        if (serverMtime === lastChangeMtime && serverMtime !== 0) {
+          return; // หยุดทำงาน ไม่โหลดไฟล์หนัก
+        }
+
+        // 3. ถ้าเวลาไม่ตรงกัน หรือ เป็นครั้งแรก (0) -> โหลดเนื้อหาไฟล์ (Heavy Load)
         const res = await fetch(
           `${API_BASE}/api/load-file?filename=ListOfChange.tsv`,
         );
-        if (!res.ok) return [];
+        if (!res.ok) return;
+
         const txt = await res.text();
-        return txt
+        const newChanges = txt
           .split("\n")
           .slice(1)
           .map((r) => {
@@ -215,23 +245,41 @@ const App: React.FC = () => {
             return o && c ? { original: o, changed: c } : null;
           })
           .filter(Boolean);
-      } catch {
-        return [];
+
+        // อัปเดตข้อมูลและจำเวลาใหม่
+        setChanges(newChanges as any);
+        setLastChangeMtime(serverMtime);
+      } catch (e) {
+        console.error("Sync error", e);
       }
     };
 
-    Promise.all([
-      loadTSV("Correct.tsv"),
-      loadTSV("fail.tsv"),
-      loadChanges(),
-    ]).then(([c, f, ch]) => {
-      if (c.length) setCorrectData(c.reverse());
-      if (f.length) setIncorrectData(f.reverse());
-      if (ch.length) setChanges(ch as any);
-    });
-  }, [employeeId]);
+    // --- Execution Flow ---
 
-  // --- 2. Check Refresh ---
+    // 1. โหลดข้อมูลหลักครั้งเดียว
+    Promise.all([loadTSV("Correct.tsv"), loadTSV("fail.tsv")]).then(
+      ([c, f]) => {
+        if (c.length) setCorrectData(c);
+        if (f.length) setIncorrectData(f);
+      },
+    );
+
+    // 2. เรียก Sync ListOfChange ครั้งแรกทันที
+    syncListOfChange();
+
+    // 3. ตั้งเวลาเช็คเบาๆ ทุก 10 วินาที (Smart Polling)
+    // การเช็ค timestamp กินเน็ตน้อยมาก (ไม่กี่ byte) ไม่ทำให้ server หนัก
+    const intervalId = setInterval(() => {
+      syncListOfChange();
+    }, 10000);
+
+    return () => clearInterval(intervalId);
+
+    // ⚠️ สำคัญ: ต้องใส่ dependencies ให้ครบ หรือใช้ Functional State update
+    // แต่เพื่อให้ง่าย ใช้ lastChangeMtime ใน dependency จะทำให้ interval reset
+    // วิธีที่ดีคือใช้ useRef สำหรับ mtime แต่เพื่อให้ code เข้าใจง่าย ผมจะยอมให้มัน reset interval เมื่อ mtime เปลี่ยน
+  }, [employeeId, lastChangeMtime]);
+
   useEffect(() => {
     if (hasStarted && audioFiles.length > 0 && !audioFiles[0].audioPath) {
       alert(
@@ -243,12 +291,10 @@ const App: React.FC = () => {
     }
   }, [hasStarted, audioFiles]);
 
-  // --- 🟢 3. Pre-Tokenization Logic (Batch) ---
   const preTokenize = async (items: AudioItem[]) => {
     const uniqueTexts = Array.from(new Set(items.map((i) => i.text))).filter(
       (t) => !tokenCache.has(t),
     );
-
     if (uniqueTexts.length === 0) return;
 
     const chunkSize = 50;
@@ -273,7 +319,6 @@ const App: React.FC = () => {
     setTokenCache(newCache);
   };
 
-  // --- Logic Functions ---
   const fileMap = useMemo(() => {
     const m = new Map<string, string>();
     audioFiles.forEach((f) => {
@@ -286,71 +331,107 @@ const App: React.FC = () => {
     () => new Set(audioFiles.map((a) => a.filename)),
     [audioFiles],
   );
+  const handleSmartCorrection = (
+    filename: string,
+    tokenIndex: number,
+    newWord: string | null,
+  ) => {
+    setSmartEdits((prev) => {
+      const fileEdits = { ...(prev[filename] || {}) };
 
+      if (newWord === null) {
+        delete fileEdits[tokenIndex]; // ถ้าส่ง null มา แปลว่า Undo (ลบออก)
+      } else {
+        fileEdits[tokenIndex] = newWord; // จำว่าคำที่ตำแหน่งนี้ แก้เป็นคำนี้
+      }
+
+      // ถ้าไม่มีการแก้ไขเหลือเลย ให้ลบ key filename ทิ้ง
+      if (Object.keys(fileEdits).length === 0) {
+        const next = { ...prev };
+        delete next[filename];
+        return next;
+      }
+
+      return { ...prev, [filename]: fileEdits };
+    });
+  };
   const enrich = (items: AudioItem[]) =>
     items.map((i) => {
       let src = i.audioPath;
       if (!src) src = fileMap.get(i.filename);
-      // แปลง Path สำหรับ Python Backend
       if (src && !src.startsWith("blob:") && !src.startsWith("http")) {
         src = `${API_BASE}/api/audio?path=${encodeURIComponent(src)}`;
       }
       return { ...i, audioPath: src };
     });
 
-  const saveFile = async (name: string, data: AudioItem[]) => {
-    setIsSaving(true);
-    const content =
-      "filename\ttext\n" +
-      data.map((i) => `${i.filename}\t${i.text}`).join("\n");
-    await fetch(`${API_BASE}/api/save-file`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename: name, content }),
-    });
-    setIsSaving(false);
-  };
-
   const playAudio = (item: AudioItem) => {
     setPlayingFile((curr) => (curr === item.filename ? null : item.filename));
   };
 
-  const handleDecision = (item: AudioItem, status: "correct" | "incorrect") => {
+  const handleDecision = async (item: AudioItem, status: "correct" | "incorrect") => {
+    // 1. รวมร่างคำ (Merge Smart Edits)
+    let finalItem = { ...item };
+    const edits = smartEdits[item.filename];
 
+    // พยายามดึง Token จาก Cache
+    let tokens = tokenCache.get(item.text);
+
+    // ถ้าไม่มีใน Cache และมี edits ให้โหลด Token ใหม่
+    if (!tokens && edits) {
+      try {
+        tokens = await handleInspect(item.text);
+      } catch (e) {
+        console.error("Failed to load tokens for decision:", e);
+        tokens = []; // fallback to empty array
+      }
+    }
+
+    if (edits && tokens) {
+      // เอา Token เดิม มาแทนที่ด้วยคำใหม่ (ถ้ามีแก้ที่ตำแหน่งนั้น)
+      const newText = tokens.map((t, i) => edits[i] || t).join("");
+      finalItem.text = newText; // ได้ข้อความใหม่แล้ว!
+    }
+
+    // 2. Logic การบันทึก (เหมือนเดิม แต่ใช้ finalItem)
     const newC =
       status === "correct"
-        
-        ? [item, ...correctData] 
-        : correctData.filter((i) => i.filename !== item.filename);
+        ? [...correctData, finalItem]
+        : correctData.filter((i) => i.filename !== finalItem.filename);
     const newF =
       status === "incorrect"
-        
-        ? [item, ...incorrectData] 
-        : incorrectData.filter((i) => i.filename !== item.filename);
+        ? [...incorrectData, finalItem]
+        : incorrectData.filter((i) => i.filename !== finalItem.filename);
 
     setCorrectData(newC);
     setIncorrectData(newF);
 
-    // 2. 🟢 แก้ไข: บันทึกข้อมูลลง Backend (ใช้แบบ Append แทน SaveFile)
     if (status === "correct") {
-      // เพิ่มลง Correct.tsv
-      appendToGlobal("Correct.tsv", item);
-      // ลบออกจาก fail.tsv (เผื่อเคยอยู่)
-      removeFromGlobal("fail.tsv", item.filename);
-
-      // User Log (Personal)
-      logUserAction(item, "correct");
+      appendToGlobal("Correct.tsv", finalItem);
+      removeFromGlobal("fail.tsv", finalItem.filename);
+      logUserAction(finalItem, "correct");
     } else {
-      // เพิ่มลง fail.tsv
-      appendToGlobal("fail.tsv", item);
-      // ลบออกจาก Correct.tsv (เผื่อเคยอยู่)
-      removeFromGlobal("Correct.tsv", item.filename);
+      appendToGlobal("fail.tsv", finalItem);
+      removeFromGlobal("Correct.tsv", finalItem.filename);
+      deleteUserLog(finalItem.filename, "correct");
+    }
 
-      // User Log (Remove personal correct log)
-      deleteUserLog(item.filename, "correct");
+    // 3. เคลียร์ Smart Edit ของไฟล์นี้ทิ้ง (เพราะบันทึกไปแล้ว)
+    setSmartEdits((prev) => {
+      const next = { ...prev };
+      delete next[item.filename];
+      return next;
+    });
+
+    // เคลียร์ Token Cache ด้วยเพื่อให้ตัดคำใหม่ในรอบหน้า
+    if (edits) {
+      setTokenCache((prev) => {
+        const next = new Map(prev);
+        next.delete(item.text);
+        return next;
+      });
     }
   };
-
   const handleCorrection = async (item: AudioItem, newText: string) => {
     const matches = [...newText.matchAll(/\(([^,]+),([^)]+)\)/g)];
     if (matches.length > 0) {
@@ -375,22 +456,15 @@ const App: React.FC = () => {
     const cleanText = newText.replace(/\(([^,]+),([^)]+)\)/g, "$2");
     const newItem = { ...item, text: cleanText };
 
-    // อัปเดต State
     const newF = incorrectData.filter((i) => i.filename !== item.filename);
     const newC = [newItem, ...correctData];
 
     setIncorrectData(newF);
     setCorrectData(newC);
 
-    // 🟢 แก้ไข: ใช้ appendToGlobal แทน saveFile
-    // saveFile("Correct.tsv", newC); <--- ลบอันนี้
-    // saveFile("fail.tsv", newF);    <--- ลบอันนี้
-    
-    // ย้ายจาก Fail -> Correct (Global)
-    appendToGlobal("Correct.tsv", newItem); // Upsert ตัวใหม่
-    removeFromGlobal("fail.tsv", item.filename); // ลบจาก Fail
-
-    logUserAction(newItem, "correct"); // Log personal
+    appendToGlobal("Correct.tsv", newItem);
+    removeFromGlobal("fail.tsv", item.filename);
+    logUserAction(newItem, "correct");
 
     setTempEdits((prev) => {
       const next = { ...prev };
@@ -398,15 +472,28 @@ const App: React.FC = () => {
       return next;
     });
   };
+
   const handleInspect = async (text: string) => {
+    // 1. ถ้ามีใน Cache แล้ว เอามาใช้เลย
     if (tokenCache.has(text)) return tokenCache.get(text) || [];
+
     try {
+      // 2. ถ้าไม่มี ให้ยิง API ไปถาม Server
       const res = await fetch(`${API_BASE}/api/tokenize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-      return await res.json();
+      const tokens = await res.json();
+
+      // 3. 🟢 สำคัญมาก: ได้ของมาแล้ว ต้องยัดใส่ Cache กลางทันที!
+      setTokenCache((prev) => {
+        const next = new Map(prev);
+        next.set(text, tokens);
+        return next;
+      });
+
+      return tokens;
     } catch {
       return [];
     }
@@ -446,7 +533,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Filtering ---
   const pending = enrich(
     audioFiles.filter(
       (i) =>
@@ -457,14 +543,10 @@ const App: React.FC = () => {
   const correct = enrich(correctData);
   const incorrect = enrich(incorrectData);
 
-  // 🟢 Effect: Background Pre-loading
   useEffect(() => {
-    if (pending.length > 0) {
-      preTokenize(pending.slice(0, 30));
-    }
+    if (pending.length > 0) preTokenize(pending.slice(0, 30));
   }, [pending.length, hasStarted]);
 
-  // --- LOGIN PAGE (Dev Feature) ---
   if (!employeeId) {
     return (
       <div className="page-container center-content bg-slate-50 min-h-screen flex items-center justify-center">
@@ -505,7 +587,6 @@ const App: React.FC = () => {
     );
   }
 
-  // --- MAIN APP ---
   if (!hasStarted)
     return (
       <>
@@ -544,10 +625,9 @@ const App: React.FC = () => {
             }
           }}
           onScan={async () => {
-            setIsLoading(true); // 🟢 Show Overlay
+            setIsLoading(true);
             setLoadingMsg("Scanning audio files...");
             await new Promise((r) => setTimeout(r, 500));
-
             try {
               let matched: AudioItem[] = [];
               if (selectedLocalFiles.length > 0) {
@@ -637,7 +717,6 @@ const App: React.FC = () => {
   return (
     <div className="app-container">
       <LoadingOverlay isVisible={isLoading} message={loadingMsg} />
-
       <header className={`app-header ${window.scrollY > 10 ? "scrolled" : ""}`}>
         <div className="header-logo">
           <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg">
@@ -652,10 +731,8 @@ const App: React.FC = () => {
             </span>
           </div>
         </div>
-
         <div className="nav-pills">
-          {/* ส่วนเดิม: ลูปสร้างปุ่ม Pending, Correct, Fail */}
-          {(["pending", "fail", "correct"] as Tab[]).map((t) => (
+          {(["pending", "correct", "fail"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setCurrentTab(t)}
@@ -671,19 +748,13 @@ const App: React.FC = () => {
               </span>
             </button>
           ))}
-
-          {/* 🟢 3.1 เพิ่มส่วนนี้เข้าไป (ต่อท้าย loop แต่ยังอยู่ใน div) */}
           <button
             onClick={() => setCurrentTab("dashboard")}
             className={`nav-item ${currentTab === "dashboard" ? "active bg-indigo-50 text-indigo-600 shadow-sm ring-1 ring-indigo-200" : "text-slate-500 hover:bg-slate-50"}`}
-            title="View Leaderboard"
           >
-            {/* อย่าลืม import BarChart2 ข้างบนด้วยนะครับ */}
-            <BarChart2 size={16} className="mr-1.5" />
-            Dashboard
+            <BarChart2 size={16} className="mr-1.5" /> Dashboard
           </button>
         </div>
-
         <div className="flex items-center gap-4">
           {isSaving && (
             <span className="text-xs text-indigo-400 flex gap-2 items-center">
@@ -709,13 +780,11 @@ const App: React.FC = () => {
               }
             }}
             className="btn-icon text-red-300 hover:text-red-500 hover:bg-red-50"
-            title="Logout"
           >
             <LogOut size={18} />
           </button>
         </div>
       </header>
-
       <main className="main-content animate-fade-in">
         {currentTab === "pending" && (
           <AnnotationPage
@@ -724,13 +793,17 @@ const App: React.FC = () => {
             playAudio={playAudio}
             playingFile={playingFile}
             onInspectText={handleInspect}
-            // tokenCache={tokenCache} // 🟢 ส่ง Cache ไปให้
+            tokenCache={tokenCache}
+            suggestions={suggestionMap}
+            // 🟢 ส่ง Props ใหม่ไปแทน onUpdateText
+            smartEdits={smartEdits}
+            onSmartCorrection={handleSmartCorrection}
           />
         )}
         {currentTab === "correct" && (
           <CorrectPage
             data={correct}
-            onMoveToFail={(i) => handleDecision(i, "incorrect")}
+            onMoveToFail={async (i) => await handleDecision(i, "incorrect")}
             onDownload={downloadTSV}
             onDownloadPersonal={downloadPersonalLog}
             playAudio={playAudio}
@@ -752,9 +825,6 @@ const App: React.FC = () => {
             setEdits={setTempEdits}
           />
         )}
-        {currentTab === "dashboard" && (
-  <DashboardPage apiBase={API_BASE} />
-)}
       </main>
     </div>
   );

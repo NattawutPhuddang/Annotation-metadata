@@ -11,6 +11,15 @@ interface Props {
   playAudio: (item: AudioItem) => void;
   playingFile: string | null;
   onInspectText: (text: string) => Promise<string[]>;
+  tokenCache?: Map<string, string[]>;
+  suggestions?: Map<string, string>;
+  // 🟢 รับ Props ใหม่
+  smartEdits: Record<string, Record<number, string>>;
+  onSmartCorrection: (
+    filename: string,
+    idx: number,
+    newWord: string | null,
+  ) => void;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -21,6 +30,10 @@ const AnnotationPage: React.FC<Props> = ({
   playAudio,
   playingFile,
   onInspectText,
+  tokenCache,
+  suggestions,
+  smartEdits, // 🟢
+  onSmartCorrection, // 🟢
 }) => {
   const [page, setPage] = useState(1);
   const items = pendingItems.slice(
@@ -29,6 +42,7 @@ const AnnotationPage: React.FC<Props> = ({
   );
   const first = items[0];
 
+  // ... (useEffect Keyboard Event คงเดิม)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (!first) return;
@@ -62,11 +76,11 @@ const AnnotationPage: React.FC<Props> = ({
   return (
     <div className="animate-fade-in">
       <div className="minimal-card mb-8">
-        <table className="custom-table">
+        <table className="custom-table w-full table-fixed">
           <thead>
             <tr>
               <th className="w-16 text-center">No.</th>
-              <th className="w-1/4">Audio Source</th> {/* ให้กว้าง 25% */}
+              <th className="w-1/4">Audio Source</th>
               <th className="w-auto">Transcript</th>
               <th className="w-32 text-center">Decision</th>
             </tr>
@@ -74,6 +88,11 @@ const AnnotationPage: React.FC<Props> = ({
           <tbody>
             {items.map((item, idx) => {
               const isPlaying = playingFile === item.filename;
+              const tokens = tokenCache?.get(item.text);
+
+              // 🟢 ดึงข้อมูลการแก้ของไฟล์นี้ออกมา (ถ้ามี)
+              const fileEdits = smartEdits[item.filename] || {};
+
               return (
                 <tr
                   key={item.filename}
@@ -86,11 +105,11 @@ const AnnotationPage: React.FC<Props> = ({
                       {(page - 1) * ITEMS_PER_PAGE + idx + 1}
                     </span>
                   </td>
-                  <td>
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between">
+                  <td className="align-middle">
+                    <div className="flex flex-col gap-1 pr-4">
+                      <div className="flex items-center justify-between mb-1">
                         <div
-                          className="text-xs text-slate-500 font-medium truncate max-w-[250px]"
+                          className="text-xs text-slate-500 font-medium truncate max-w-[200px]"
                           title={item.filename}
                         >
                           {item.filename}
@@ -110,8 +129,6 @@ const AnnotationPage: React.FC<Props> = ({
                           )}
                         </button>
                       </div>
-
-                      {/* Line Player */}
                       {item.audioPath ? (
                         <WaveformPlayer
                           audioUrl={item.audioPath}
@@ -119,7 +136,7 @@ const AnnotationPage: React.FC<Props> = ({
                           onPlayChange={(p) => {
                             if (p !== isPlaying) playAudio(item);
                           }}
-                          progressColor="#818cf8" // Theme Color
+                          progressColor="#818cf8"
                           height="h-1.5"
                         />
                       ) : (
@@ -129,28 +146,31 @@ const AnnotationPage: React.FC<Props> = ({
                       )}
                     </div>
                   </td>
-                  <td className="align-middle">
-                    <div
-                      className={`text-token pl-4 border-l-2 ${idx === 0 ? "border-primary" : "border-indigo-100"} py-1`}
-                    >
-                      <TokenizedText
-                        text={item.text}
-                        onInspect={onInspectText}
-                        isExpanded={idx === 0}
-                      />
-                    </div>
+                  <td className="align-middle px-2">
+                    <TokenizedText
+                      text={item.text}
+                      onInspect={onInspectText}
+                      isExpanded={false}
+                      tokens={tokens}
+                      suggestions={suggestions}
+                      // 🟢 ส่งข้อมูลการแก้และฟังก์ชัน Callback
+                      appliedEdits={fileEdits}
+                      onApplyCorrection={(index, newWord) =>
+                        onSmartCorrection(item.filename, index, newWord)
+                      }
+                    />
                   </td>
                   <td className="align-middle">
                     <div className="flex justify-center gap-3">
                       <button
-                        onClick={() => onDecision(item, "correct")}
+                        onClick={async () => await onDecision(item, "correct")}
                         className="btn-icon btn-check"
                         title="Correct"
                       >
                         <Check size={20} strokeWidth={2.5} />
                       </button>
                       <button
-                        onClick={() => onDecision(item, "incorrect")}
+                        onClick={async () => await onDecision(item, "incorrect")}
                         className="btn-icon btn-cross"
                         title="Incorrect"
                       >

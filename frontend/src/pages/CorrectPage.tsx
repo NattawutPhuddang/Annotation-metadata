@@ -159,7 +159,7 @@ const CorrectPage: React.FC<Props> = ({
                   </td>
                   <td className="text-center align-middle">
                     <button
-                      onClick={() => onMoveToFail(item)}
+                      onClick={async () => await onMoveToFail(item)}
                       className="btn-icon bg-rose-50 text-rose-400 hover:bg-rose-500 hover:text-white"
                     >
                       <X size={20} strokeWidth={2.5} />
