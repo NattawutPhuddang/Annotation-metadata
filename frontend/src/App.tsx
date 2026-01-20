@@ -98,6 +98,35 @@ const App: React.FC = () => {
     }
   };
 
+  // 🟢 NEW: ฟังก์ชันสำหรับอัปเดตไฟล์ Global แบบปลอดภัย (ใช้ Append/Upsert)
+  const appendToGlobal = async (filename: string, item: AudioItem) => {
+    setIsSaving(true);
+    try {
+      await fetch(`${API_BASE}/api/append-tsv`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, item }),
+      });
+    } catch (e) {
+      console.error(`Error appending to ${filename}`, e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 🟢 NEW: ฟังก์ชันสำหรับลบออกจาก Global (ใช้ API ที่มีอยู่แล้ว)
+  const removeFromGlobal = async (filename: string, key: string) => {
+    try {
+      await fetch(`${API_BASE}/api/delete-tsv-entry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, key }),
+      });
+    } catch (e) {
+      console.error(`Error deleting from ${filename}`, e);
+    }
+  };
+
   // --- Persistence ---
   useEffect(() => {
     if (employeeId) localStorage.setItem("employeeId", employeeId);
@@ -280,6 +309,7 @@ const App: React.FC = () => {
   };
 
   const handleDecision = (item: AudioItem, status: "correct" | "incorrect") => {
+    // 1. อัปเดต State หน้าจอ (เพื่อให้ UI ตอบสนองทันที)
     const newC =
       status === "correct"
         ? [...correctData, item]
@@ -291,13 +321,23 @@ const App: React.FC = () => {
 
     setCorrectData(newC);
     setIncorrectData(newF);
-    saveFile("Correct.tsv", newC);
-    saveFile("fail.tsv", newF);
 
-    // User Log (Dev Feature)
+    // 2. 🟢 แก้ไข: บันทึกข้อมูลลง Backend (ใช้แบบ Append แทน SaveFile)
     if (status === "correct") {
+      // เพิ่มลง Correct.tsv
+      appendToGlobal("Correct.tsv", item);
+      // ลบออกจาก fail.tsv (เผื่อเคยอยู่)
+      removeFromGlobal("fail.tsv", item.filename);
+
+      // User Log (Personal)
       logUserAction(item, "correct");
     } else {
+      // เพิ่มลง fail.tsv
+      appendToGlobal("fail.tsv", item);
+      // ลบออกจาก Correct.tsv (เผื่อเคยอยู่)
+      removeFromGlobal("Correct.tsv", item.filename);
+
+      // User Log (Remove personal correct log)
       deleteUserLog(item.filename, "correct");
     }
   };
@@ -326,13 +366,20 @@ const App: React.FC = () => {
     const cleanText = newText.replace(/\(([^,]+),([^)]+)\)/g, "$2");
     const newItem = { ...item, text: cleanText };
 
+    // อัปเดต State
     const newF = incorrectData.filter((i) => i.filename !== item.filename);
     const newC = [...correctData, newItem];
 
     setIncorrectData(newF);
     setCorrectData(newC);
-    saveFile("Correct.tsv", newC);
-    saveFile("fail.tsv", newF);
+
+    // 🟢 แก้ไข: ใช้ appendToGlobal แทน saveFile
+    // saveFile("Correct.tsv", newC); <--- ลบอันนี้
+    // saveFile("fail.tsv", newF);    <--- ลบอันนี้
+    
+    // ย้ายจาก Fail -> Correct (Global)
+    appendToGlobal("Correct.tsv", newItem); // Upsert ตัวใหม่
+    removeFromGlobal("fail.tsv", item.filename); // ลบจาก Fail
 
     logUserAction(newItem, "correct"); // Log personal
 
@@ -342,7 +389,6 @@ const App: React.FC = () => {
       return next;
     });
   };
-
   const handleInspect = async (text: string) => {
     if (tokenCache.has(text)) return tokenCache.get(text) || [];
     try {
