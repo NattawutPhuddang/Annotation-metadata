@@ -30,7 +30,7 @@ export const DirectoryPicker: React.FC<DirectoryPickerProps> = ({ isOpen, onClos
   const fetchDir = async (path: string) => {
     setLoading(true);
     try {
-      const res = await fetch('http://10.2.98.160:3003/api/list-files', {
+      const res = await fetch('http://10.2.98.118:3003/api/list-files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentPath: path })
