@@ -219,7 +219,7 @@ const App: React.FC = () => {
       loadChanges(),
     ]).then(([c, f, ch]) => {
       if (c.length) setCorrectData(c);
-      if (f.length) setIncorrectData(f);
+      if (f.length) setIncorrectData(f.reverse());
       if (ch.length) setChanges(ch as any);
     });
   }, [employeeId]);
@@ -316,7 +316,8 @@ const App: React.FC = () => {
         : correctData.filter((i) => i.filename !== item.filename);
     const newF =
       status === "incorrect"
-        ? [...incorrectData, item]
+        // 🟢 แก้ตรงนี้: เอา item ไว้ข้างหน้า incorrectData (แทรกบนสุด)
+        ? [item, ...incorrectData] 
         : incorrectData.filter((i) => i.filename !== item.filename);
 
     setCorrectData(newC);
