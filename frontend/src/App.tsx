@@ -400,7 +400,7 @@ const App: React.FC = () => {
     // 2. Logic การบันทึก (เหมือนเดิม แต่ใช้ finalItem)
     const newC =
       status === "correct"
-        ? [...correctData, finalItem]
+        ? [finalItem, ...correctData]
         : correctData.filter((i) => i.filename !== finalItem.filename);
     const newF =
       status === "incorrect"
