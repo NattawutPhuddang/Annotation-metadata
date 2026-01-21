@@ -16,13 +16,20 @@ export const WaveformPlayer: React.FC<Props> = ({
   height = 'h-4'
 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // 🟢 1. สร้าง Ref เพื่อเก็บ onPlayChange ล่าสุด
+  const onPlayChangeRef = useRef(onPlayChange);
+
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  // --- Logic การดึง URL ที่ถูกต้อง (แก้ปัญหา URL ชนกัน) ---
+  // 🟢 2. อัปเดต Ref ทุกครั้งที่ค่าเปลี่ยน
+  useEffect(() => {
+    onPlayChangeRef.current = onPlayChange;
+  }, [onPlayChange]);
+
   const getCleanUrl = (url: string) => {
     if (!url) return '';
-    // ถ้าเจอ blob: ซ้อนกัน หรือมี http นำหน้า ให้ดึงเฉพาะ blob: ตัวสุดท้าย
     const match = url.match(/(blob:.*)/);
     return match ? match[1] : url;
   };
@@ -30,24 +37,26 @@ export const WaveformPlayer: React.FC<Props> = ({
   const cleanUrl = getCleanUrl(audioUrl);
 
   useEffect(() => {
-    if (!cleanUrl) return; // ถ้าไม่มี URL ไม่ต้องทำอะไร
+    if (!cleanUrl) return;
 
     const audio = new Audio(cleanUrl);
     audioRef.current = audio;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => setDuration(audio.duration);
+    
+    // 🟢 3. เรียกใช้ผ่าน Ref แทน
     const handleEnded = () => {
-        onPlayChange?.(false);
+        onPlayChangeRef.current?.(false);
         setCurrentTime(0);
     };
     
-    // Error Handling
-    audio.addEventListener('error', (e) => {
+    const handleError = (e: Event) => {
         console.error("Audio Load Error:", e);
-        onPlayChange?.(false); // หยุดสถานะเล่นถ้าไฟล์เสีย
-    });
+        onPlayChangeRef.current?.(false);
+    };
 
+    audio.addEventListener('error', handleError);
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('ended', handleEnded);
@@ -57,28 +66,31 @@ export const WaveformPlayer: React.FC<Props> = ({
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', () => {});
+      audio.removeEventListener('error', handleError);
     };
-  }, [cleanUrl, onPlayChange]);
+    
+    // 🟢 4. ลบ onPlayChange ออกจาก Dependency Array (ใช้แค่ cleanUrl พอ)
+  }, [cleanUrl]); 
 
   // Sync Play/Pause
   useEffect(() => {
-    if (!audioRef.current || !cleanUrl) return; // เช็ค cleanUrl ด้วย
+    if (!audioRef.current || !cleanUrl) return;
     
     if (isPlaying) {
         const playPromise = audioRef.current.play();
         if (playPromise !== undefined) {
             playPromise.catch(error => {
                 console.error("Play prevented or failed:", error);
-                onPlayChange?.(false); // Reset ปุ่ม Play ถ้าเล่นไม่ได้
+                // 🟢 เรียกผ่าน Ref
+                onPlayChangeRef.current?.(false);
             });
         }
     } else {
         audioRef.current.pause();
     }
+    // เพิ่ม audioRef.current ใน deps เพื่อความชัวร์ (แต่ปกติ cleanUrl เปลี่ยน audioRef ก็เปลี่ยนอยู่แล้ว)
   }, [isPlaying, cleanUrl]);
 
-  // ... (ส่วน Render Slider และ formatTime เหมือนเดิม) ...
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const time = Number(e.target.value);
     if (audioRef.current) {
