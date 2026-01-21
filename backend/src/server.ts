@@ -11,6 +11,65 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+// 🟢 NEW: ระบบ Auto Backup (กันไฟล์หาย)
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+if (!fs.existsSync(BACKUP_DIR)) {
+  fs.mkdirSync(BACKUP_DIR, { recursive: true });
+}
+
+const runBackup = () => {
+  try {
+    const now = new Date();
+    // ตั้งชื่อโฟลเดอร์ตามเวลา: YYYYMMDD-HHmm (เช่น 20240121-1530)
+    const timestamp = now.toISOString().replace(/[:T]/g, '-').slice(0, 16).replace(/\..+/, '');
+    const currentBackupDir = path.join(BACKUP_DIR, timestamp);
+
+    // สร้างโฟลเดอร์ Backup รอบนี้
+    if (!fs.existsSync(currentBackupDir)) {
+      fs.mkdirSync(currentBackupDir, { recursive: true });
+    }
+
+    // อ่านไฟล์ทั้งหมดใน data
+    const files = fs.readdirSync(DATA_DIR);
+    let count = 0;
+
+    files.forEach(file => {
+      const sourcePath = path.join(DATA_DIR, file);
+      // เช็คว่าเป็นไฟล์ .tsv หรือไม่ (ไม่เอา folder backups และไม่เอาไฟล์เสียง)
+      if (file.endsWith('.tsv') && fs.lstatSync(sourcePath).isFile()) {
+        fs.copyFileSync(sourcePath, path.join(currentBackupDir, file));
+        count++;
+      }
+    });
+
+    if (count > 0) {
+      console.log(`[Auto Backup] Saved ${count} files to backups/${timestamp}`);
+    }
+
+    // Cleanup: ลบ Backup เก่าทิ้ง (เก็บไว้แค่ 60 อันล่าสุด หรือ 1 ชม.)
+    const allBackups = fs.readdirSync(BACKUP_DIR).sort();
+    if (allBackups.length > 10) {
+      const toDelete = allBackups.slice(0, allBackups.length - 10);
+      toDelete.forEach(dirName => {
+        try {
+          fs.rmSync(path.join(BACKUP_DIR, dirName), { recursive: true, force: true });
+          console.log(`[Auto Backup] Cleaned up old backup: ${dirName}`);
+        } catch (e) {
+          console.error(`[Auto Backup] Failed to delete ${dirName}`, e);
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error("[Auto Backup Error]", error);
+  }
+};
+
+// สั่งให้ Backup ทำงานทุกๆ 1 นาที (60000 ms)
+setInterval(runBackup, 60 * 1000);
+// เรียกครั้งแรกทันทีตอนรัน server เพื่อความชัวร์
+runBackup();
+
 const getFilePath = (filename: string) => path.join(DATA_DIR, filename);
 
 const app = express();
@@ -19,17 +78,6 @@ const PORT = process.env.PORT || 3003;
 app.use(cors());
 app.use(express.json());
 
-// const thaiSegmenter = new Intl.Segmenter('th', { granularity: 'word' });
-// const tokenizeText = (text: string): string[] => {
-//   if (!text) return [];
-//   try {
-//     return Array.from(thaiSegmenter.segment(text))
-//       .filter((seg) => seg.isWordLike)
-//       .map((seg) => seg.segment);
-//   } catch (error) {
-//     return text.trim().split(/\s+/);
-//   }
-// };
 const tokenizeText = async (text: string): Promise<string[]> => {
   if (!text) return [];
   
@@ -61,15 +109,14 @@ const tokenizeText = async (text: string): Promise<string[]> => {
   }
 };
 
-// ⚠️ อย่าลืมแก้จุดที่เรียกใช้ tokenizeText ให้ใส่ await ด้วย
-app.post('/api/tokenize', async (req, res) => { // ใส่ async
+app.post('/api/tokenize', async (req, res) => {
   try {
     const { text } = req.body;
-    const tokens = await tokenizeText(text || ''); // ใส่ await
+    const tokens = await tokenizeText(text || '');
     res.json(tokens);
   } catch (e) { res.json([]); }
 });
-// 🟢 NEW: เพิ่ม Endpoint สำหรับ Batch Tokenize
+
 app.post('/api/tokenize-batch', async (req, res) => {
   try {
     const { texts } = req.body;
@@ -77,7 +124,6 @@ app.post('/api/tokenize-batch', async (req, res) => {
       return res.json([]);
     }
 
-    // 1. ลองส่งไปให้ Python Service ช่วยตัดคำ (เร็วและแม่นกว่า)
     try {
       const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
       const response = await fetch(`${pythonUrl}/api/tokenize-batch`, { 
@@ -94,7 +140,6 @@ app.post('/api/tokenize-batch', async (req, res) => {
       console.error("Python NLP batch service error, falling back to JS:", error);
     }
 
-    // 2. Fallback: ถ้า Python ตาย ให้ใช้ JS Loop ตัดเอง (ช้ากว่าแต่กันระบบล่ม)
     const thaiSegmenter = new Intl.Segmenter('th', { granularity: 'word' });
     const results = texts.map(text => {
       try {
@@ -188,7 +233,7 @@ app.post('/api/append-tsv', (req, res) => {
 
 // 🟢 NEW API: ลบข้อมูลออกจากไฟล์ TSV (สำหรับปุ่ม X)
 app.post('/api/delete-tsv-entry', (req, res) => {
-  const { filename, key } = req.body; // key คือชื่อไฟล์เสียงที่ต้องการลบ
+  const { filename, key } = req.body;
   const filePath = getFilePath(filename);
 
   if (!fs.existsSync(filePath)) return res.send('File not found');
@@ -197,11 +242,8 @@ app.post('/api/delete-tsv-entry', (req, res) => {
     const content = fs.readFileSync(filePath, 'utf8');
     const rows = content.split('\n');
     
-    // เก็บ Header ไว้ (filename \t text)
     const header = rows[0];
     
-    // กรองเอาแถวที่ "ชื่อไฟล์เสียง" (col 0) ไม่ตรงกับ key
-    // พูดง่ายๆ คือ เอาเฉพาะตัวที่ไม่ใช่ตัวที่จะลบ
     const newRows = rows.slice(1).filter(line => {
       const parts = line.split('\t');
       return parts[0] !== key && line.trim() !== '';
@@ -234,17 +276,13 @@ app.get('/api/dashboard-stats', (req, res) => {
     const stats: { user: string; count: number }[] = [];
 
     files.forEach(file => {
-      // ค้นหาไฟล์ที่มีรูปแบบ: {ชื่อพนักงาน}-Correct.tsv
-      // (ไม่นับไฟล์ Correct.tsv กลาง เพราะอันนั้นเป็นผลรวม)
       const match = file.match(/^(.+)-Correct\.tsv$/);
       
       if (match) {
-        const userId = match[1]; // ชื่อพนักงาน เช่น EMP001
+        const userId = match[1];
         const filePath = path.join(DATA_DIR, file);
         
-        // อ่านไฟล์และนับบรรทัด
         const content = fs.readFileSync(filePath, 'utf8');
-        // กรองบรรทัดว่างออก และลบ 1 (Header)
         const lines = content.split('\n').filter(line => line.trim() !== '');
         const count = Math.max(0, lines.length - 1);
         
@@ -252,7 +290,6 @@ app.get('/api/dashboard-stats', (req, res) => {
       }
     });
 
-    // เรียงลำดับจากมากไปน้อย
     stats.sort((a, b) => b.count - a.count);
     
     res.json(stats);
@@ -281,20 +318,38 @@ app.post('/api/scan-audio', (req, res) => {
   res.json(results);
 });
 
-// สำหรับ ListOfChange (ใช้ append-change เหมือนเดิมก็ได้ หรือจะใช้ append-tsv ก็ได้ แต่แยกไว้เพื่อความชัดเจน)
 app.post('/api/append-change', (req, res) => {
   const { original, changed, filename } = req.body;
+  
+  // 1. บันทึกลง ListOfChange.tsv (Log การทำงาน)
   const targetFile = filename || 'ListOfChange.tsv';
   const line = `\n${original}\t${changed}`;
   const filePath = getFilePath(targetFile);
 
   fs.appendFile(filePath, line, 'utf8', (err) => {
-    if (err) res.status(500).send('Error appending');
-    else res.send('Appended');
+    if (err) return res.status(500).send('Error appending');
+
+    // 🟢 2. NEW: ระบบ Auto-Learn (บันทึกลง Dictionary)
+    const CUSTOM_DICT_PATH = path.join(__dirname, '..', 'custom_dict.txt');
+    const wordsToAdd: string[] = [];
+
+    // เพิ่มทั้งคำผิดและคำถูก เพื่อให้ครั้งหน้าตัดเป็นก้อนเดียวกันได้
+    if (original && original.trim()) wordsToAdd.push(original.trim());
+    if (changed && changed.trim()) wordsToAdd.push(changed.trim());
+
+    if (wordsToAdd.length > 0) {
+      const content = '\n' + wordsToAdd.join('\n');
+      // appendFile จะสร้างไฟล์ให้เองถ้ายังไม่มี
+      fs.appendFile(CUSTOM_DICT_PATH, content, 'utf8', (dictErr) => {
+        if (dictErr) console.error("[Auto-Dict] Failed to update:", dictErr);
+        else console.log(`[Auto-Dict] Learned: ${wordsToAdd.join(', ')}`);
+      });
+    }
+    
+    res.send('Appended & Updated Dict');
   });
 });
 
-// 🟢 NEW: API เช็คเวลาการแก้ไขล่าสุดของไฟล์ (สำหรับ Smart Polling)
 app.get('/api/check-mtime', (req, res) => {
   const filename = req.query.filename as string;
   const filePath = getFilePath(filename);
@@ -305,6 +360,7 @@ app.get('/api/check-mtime', (req, res) => {
     res.json({ mtime: 0 });
   }
 });
+
 
 app.listen(PORT, () => {
   console.log(`Server running: http://10.2.98.118:3003:${PORT}`);
