@@ -863,7 +863,7 @@ const App: React.FC = () => {
   <DashboardPage apiBase={API_BASE} />
         )}
       </main>
-      <CatSystem catState={catState} setCatState={setCatState} />
+      {/* <CatSystem catState={catState} setCatState={setCatState} /> */}
     </div>
   );
 };
