@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Scissors, Loader2, ChevronUp, Wand2, Undo2 } from "lucide-react";
+import { Scissors, Loader2, ChevronUp, Wand2, Undo2, Trash2 } from "lucide-react";
 
 interface TokenizedTextProps {
   text: string;
@@ -74,8 +74,8 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
     if (isEdited) {
       // Undo: ส่ง null ไปบอก Parent ว่าลบการแก้นี้
       onApplyCorrection(idx, null);
-    } else if (suggested) {
-      // Apply: ส่งคำใหม่ไป
+    } else if (suggested !== undefined) {
+      // Apply: ส่งคำใหม่ไป (รวมถึงค่าว่าง "" สำหรับการลบ)
       onApplyCorrection(idx, suggested);
     }
   };
@@ -89,8 +89,8 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
         <span
           className={`text-lg leading-relaxed z-10 font-sans ${expanded ? "font-semibold text-sky-700" : "font-medium text-slate-700"}`}
         >
-          {/* ใช้ appliedEdits มาแสดงผลแทน Text เดิม */}
-          {tokens ? tokens.map((t, i) => appliedEdits[i] || t).join("") : text}
+          {/* ใช้ appliedEdits มาแสดงผลแทน Text เดิม (ใช้ ?? เพื่อรองรับค่าว่าง) */}
+          {tokens ? tokens.map((t, i) => appliedEdits[i] ?? t).join("") : text}
           
         
         </span>
@@ -140,14 +140,26 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
                   };
 
                   if (isEdited) {
-                    cardStyle = {
-                      bg: "#dcfce7",
-                      border: "#86efac",
-                      color: "#15803d",
-                      cursor: "pointer",
-                      shadow: "0 2px 4px rgba(0,0,0,0.05)",
-                    };
-                  } else if (suggestion) {
+                    if (displayToken === "") {
+                         // กรณีถูกลบ (Deleted)
+                         cardStyle = {
+                            bg: "#fee2e2",
+                            border: "#fca5a5",
+                            color: "#b91c1c",
+                            cursor: "pointer",
+                            shadow: "0 2px 4px rgba(0,0,0,0.05)",
+                          };
+                    } else {
+                        // กรณีแก้ไขปกติ
+                        cardStyle = {
+                            bg: "#dcfce7",
+                            border: "#86efac",
+                            color: "#15803d",
+                            cursor: "pointer",
+                            shadow: "0 2px 4px rgba(0,0,0,0.05)",
+                        };
+                    }
+                  } else if (suggestion !== undefined) { // เช็ค !== undefined เพื่อรองรับค่าว่าง
                     cardStyle = {
                       bg: "#ffedd5",
                       border: "#fdba74",
@@ -168,6 +180,7 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
                         alignItems: "center",
                         justifyContent: "center",
                         minWidth: "60px",
+                        minHeight: "56px", // เพิ่มความสูงขั้นต่ำ
                         padding: "10px 16px",
                         backgroundColor: cardStyle.bg,
                         border: `1px solid ${cardStyle.border}`,
@@ -187,15 +200,17 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
                           zIndex: 10,
                         }}
                       >
-                        {displayToken}
+                         {/* ถ้าเป็นค่าว่าง ให้แสดงคำว่า Deleted */}
+                        {displayToken === "" ? <span className="text-xs opacity-50 italic font-normal">Deleted</span> : displayToken}
                       </span>
 
-                      {suggestion && !isEdited && (
+                      {suggestion !== undefined && !isEdited && (
                         <div
                           style={{
                             position: "absolute",
                             top: "-10px",
-                            backgroundColor: "#f97316",
+                            // ถ้าแนะนำให้ลบ (ว่าง) ใช้สีแดง
+                            backgroundColor: suggestion === "" ? "#ef4444" : "#f97316",
                             color: "white",
                             fontSize: "16px",
                             padding: "2px 6px",
@@ -208,7 +223,13 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
                             zIndex: 20,
                           }}
                         >
-                          {suggestion}
+                          {suggestion === "" ? (
+                            <div className="flex items-center gap-1 text-xs font-bold px-1">
+                                <Trash2 size={12} strokeWidth={2.5}/> ลบออก
+                            </div>
+                          ) : (
+                            suggestion
+                          )}
                         </div>
                       )}
 
@@ -240,7 +261,7 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
                           right: "5px",
                           fontSize: "9px",
                           fontWeight: "bold",
-                          color: "#94a3b8",
+                          color: displayToken === "" ? "#b91c1c" : "#94a3b8",
                           opacity: 0.6,
                           pointerEvents: "none",
                         }}

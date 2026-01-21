@@ -737,6 +737,53 @@ thead th {
   color: white;
   margin-bottom: 1rem;
 }
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 2s infinite ease-in-out;
+}
+/* Animation สำหรับแมวเดินดุ๊กดิ๊ก */
+@keyframes bounce-walk {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.animate-bounce-walk {
+  animation: bounce-walk 0.4s infinite ease-in-out;
+}
+
+/* Animation หางกระดิก */
+@keyframes tail-wag {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(15deg); }
+}
+
+.animate-tail-wag {
+  animation: tail-wag 2s infinite ease-in-out;
+}
+
+/* ข้อความลอยขึ้นเวลาซื้อของ */
+@keyframes float-up {
+  0% { transform: translateY(0); opacity: 0; }
+  20% { opacity: 1; }
+  100% { transform: translateY(-30px); opacity: 0; }
+}
+
+.animate-float-up {
+  animation: float-up 1.5s ease-out forwards;
+}
+
+/* ซ่อน Scrollbar แนวนอนใน Shop */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
 
 /* --- Download Button Custom Styles --- */
 .btn-download {

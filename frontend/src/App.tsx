@@ -8,6 +8,7 @@ import EditPage from "./pages/EditPage";
 import { LogOut, Save, Music, User, ArrowRight, BarChart2, Moon, Sun } from "lucide-react";
 import { LoadingOverlay } from "./components/LoadingOverlay";
 import DashboardPage from "./pages/DashboardPage";
+import { CatSystem, CatState } from "./components/CatSystem";
 
 type Tab = "pending" | "correct" | "fail" | "dashboard";
 
@@ -66,30 +67,20 @@ const App: React.FC = () => {
   const getFileName = (base: string) => `${employeeId}-${base}`;
 
   // 🟢 NEW: สร้าง Map คำผิด->คำถูก เพื่อให้ค้นหาเร็วๆ (ใช้ใน AnnotationPage)
-  const suggestionMap = useMemo(() => {
+ const suggestionMap = useMemo(() => {
     const map = new Map<string, string>();
     changes.forEach((c) => {
-      // if (c.original !== undefined && c.changed !== undefined) map.set(c.original.trim(), c.changed.trim());
-      if (c.original) map.set(c.original.trim(), c.changed.trim());
+      // ❌ เดิม: if (c.original) ...
+      // (จริงๆ if (c.original) ก็พอใช้ได้ แต่เพื่อความชัวร์ให้เช็คแบบนี้)
+      
+      if (c.original) {
+        // บันทึกลง Map แม้ว่า c.changed จะเป็น "" (ค่าว่าง)
+        map.set(c.original.trim(), c.changed.trim());
+      }
     });
     return map;
   }, [changes]);
 
-  // 🟢 NEW: ฟังก์ชันอัปเดตข้อความใน Memory (เมื่อกดแก้คำสีส้ม)
-  const handleUpdateText = (item: AudioItem, newText: string) => {
-    // 1. อัปเดตใน audioFiles (State หลัก)
-    setAudioFiles((prev) =>
-      prev.map((f) =>
-        f.filename === item.filename ? { ...f, text: newText } : f,
-      ),
-    );
-    // 2. ล้าง Token Cache ของคำเก่า เพื่อให้ตัดคำใหม่
-    setTokenCache((prev) => {
-      const next = new Map(prev);
-      next.delete(item.text);
-      return next;
-    });
-  };
 
   const deleteUserLog = async (filenameKey: string, type: "correct") => {
     try {
@@ -148,6 +139,19 @@ const App: React.FC = () => {
     }
   };
 
+  const [catState, setCatState] = useState<CatState>(() => 
+    JSON.parse(localStorage.getItem("catState") || JSON.stringify({
+        coins: 0,
+        hunger: 80,
+        clean: 80,
+        joy: 80,
+        costume: ""
+    }))
+  );
+
+  useEffect(() => {
+    localStorage.setItem("catState", JSON.stringify(catState));
+  }, [catState]);
   useEffect(() => {
     if (employeeId) localStorage.setItem("employeeId", employeeId);
   }, [employeeId]);
@@ -244,10 +248,23 @@ const App: React.FC = () => {
           .split("\n")
           .slice(1)
           .map((r) => {
-            const [o, c] = r.trim().split("\t");
-            return o && c ? { original: o, changed: c } : null;
+            // ❌ เดิม: const [o, c] = r.trim().split("\t");
+            // ❌ เดิม: return o && c ? { original: o, changed: c } : null;
+
+            // ✅ ใหม่: อย่าเพิ่ง trim ทั้งบรรทัด ให้ split ก่อนเพื่อรักษาช่องว่างหลัง Tab ไว้
+            // ใช้ replace เพื่อลบแค่ Newline (\r\n) ท้ายบรรทัดออก
+            const parts = r.replace(/[\r\n]+$/, '').split("\t");
+            
+            // ต้องมีอย่างน้อย 2 คอลัมน์ (คำเดิม, คำใหม่)
+            if (parts.length < 2) return null;
+
+            const o = parts[0].trim();
+            const c = parts[1].trim(); // คำใหม่อาจจะเป็นค่าว่าง "" ก็ได้
+
+            // เช็คแค่ o (คำเดิม) ต้องมีค่า ส่วน c (คำแก้) เป็นค่าว่างได้ (แปลว่าให้ลบ)
+            return o ? { original: o, changed: c } : null;
           })
-          .filter(Boolean);
+          .filter(Boolean); // กรองบรรทัดที่ null ออก
 
         // อัปเดตข้อมูลและจำเวลาใหม่
         setChanges(newChanges as any);
@@ -380,7 +397,13 @@ const App: React.FC = () => {
 
     // พยายามดึง Token จาก Cache
     let tokens = tokenCache.get(item.text);
-
+    
+    setCatState(prev => ({
+        ...prev,
+        coins: prev.coins + 10,
+        // ลดความสุขเล็กน้อยจากการที่เจ้าของมัวแต่ทำงาน (ล้อเล่นครับ อันนี้เพื่อให้ User อยากกดเล่นกับแมว)
+        joy: Math.max(0, prev.joy - 1) 
+    }));
     // ถ้าไม่มีใน Cache และมี edits ให้โหลด Token ใหม่
     if (!tokens && edits) {
       try {
@@ -391,10 +414,16 @@ const App: React.FC = () => {
       }
     }
 
+    // if (edits && tokens) {
+    //   // เอา Token เดิม มาแทนที่ด้วยคำใหม่ (ถ้ามีแก้ที่ตำแหน่งนั้น)
+    //   const newText = tokens.map((t, i) => edits[i] || t).join("");
+    //   finalItem.text = newText; // ได้ข้อความใหม่แล้ว!
+    // }
     if (edits && tokens) {
-      // เอา Token เดิม มาแทนที่ด้วยคำใหม่ (ถ้ามีแก้ที่ตำแหน่งนั้น)
-      const newText = tokens.map((t, i) => edits[i] || t).join("");
-      finalItem.text = newText; // ได้ข้อความใหม่แล้ว!
+      // 🟢 แก้ไข: ใช้ ?? แทน || เพื่อให้ยอมรับค่าว่าง "" (การลบคำ) ได้
+      // ถ้าใช้ || เมื่อ edits[i] เป็น "" มันจะไปเอา t (คำเดิม) มาแทน ซึ่งผิด
+      const newText = tokens.map((t, i) => edits[i] ?? t).join("");
+      finalItem.text = newText;
     }
 
     // 2. Logic การบันทึก (เหมือนเดิม แต่ใช้ finalItem)
@@ -438,6 +467,7 @@ const App: React.FC = () => {
   };
   const handleCorrection = async (item: AudioItem, newText: string) => {
     const matches = [...newText.matchAll(/\(([^,]+),([^)]+)\)/g)];
+    setCatState(prev => ({ ...prev, coins: prev.coins + 20 }));
     if (matches.length > 0) {
       for (const m of matches) {
         try {
@@ -833,6 +863,7 @@ const App: React.FC = () => {
   <DashboardPage apiBase={API_BASE} />
         )}
       </main>
+      <CatSystem catState={catState} setCatState={setCatState} />
     </div>
   );
 };
