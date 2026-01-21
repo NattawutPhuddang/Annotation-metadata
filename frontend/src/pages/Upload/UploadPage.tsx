@@ -156,31 +156,23 @@ const UploadPage: React.FC = () => {
           <label className="input-label flex items-center gap-2">
             <Folder size={14}/> Audio Source
           </label>
-          
-          <div className="path-input-group">
-             <input 
-               type="text" 
-               className="path-input" 
-               placeholder="/server/path/to/audio OR select local folder ->"
-               value={localPathInput}
-               onChange={(e) => setLocalPathInput(e.target.value)}
-             />
-             <button 
-               className="browse-btn"
-               onClick={() => document.getElementById('folder-upload')?.click()}
-               title="Select Local Folder"
-             >
-               Browse...
-             </button>
-             <input
-                id="folder-upload"
-                type="file"
-                // @ts-ignore
-                webkitdirectory=""
-                directory=""
-                className="hidden"
-                onChange={handleFolderSelect}
-             />
+          <div className="dropzone-area" onClick={() => document.getElementById('folder-upload')?.click()}>
+            <input
+              id="folder-upload"
+              type="file"
+              // @ts-ignore
+              webkitdirectory=""
+              directory=""
+              className="hidden"
+              onChange={handleFolderSelect}
+            />
+            {selectedLocalFiles.length > 0 ? (
+              <div className="file-status text-center">
+                Loaded {selectedLocalFiles.length} files
+              </div>
+            ) : (
+              <span className="dropzone-text">Click to select audio folder</span>
+            )}
           </div>
         </div>
 

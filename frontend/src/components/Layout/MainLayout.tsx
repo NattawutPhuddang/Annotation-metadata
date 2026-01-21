@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Music, LogOut, Sun, Moon, BarChart2, Save } from 'lucide-react';
+import { Music, LogOut, Sun, Moon, BarChart2, Save, Upload } from 'lucide-react';
 import { useAnnotation } from '../../context/AnnotationContext';
 import './MainLayout.css';
 
@@ -17,7 +17,8 @@ const MainLayout: React.FC = () => {
   const { 
     employeeId, logout, isDarkMode, toggleTheme, 
     pendingItems, correctData, incorrectData,
-    isLoading, hasStarted
+    isLoading, hasStarted, setHasStarted, // ADD setHasStarted
+    setAudioFiles, setAudioPath // ADD these to reset
   } = useAnnotation();
 
   const [currentTab, setCurrentTab] = useState<Tab>("pending");
@@ -26,6 +27,15 @@ const MainLayout: React.FC = () => {
   if (!hasStarted) {
     return <UploadPage />;
   }
+
+  // Handle Back to Upload
+  const handleBackToUpload = () => {
+    if (window.confirm("Go back to upload? Current workspace will be cleared.")) {
+      setHasStarted(false);
+      setAudioFiles([]);
+      setAudioPath("");
+    }
+  };
 
   // 2. ถ้าเริ่มแล้ว แสดง Layout หลัก
   return (
@@ -80,11 +90,28 @@ const MainLayout: React.FC = () => {
             </span>
           )}
           
-          <button onClick={toggleTheme} className="btn-icon-header" title="Toggle Theme">
+          <button 
+            onClick={toggleTheme} 
+            className="btn-icon-header" 
+            title="Toggle Theme"
+          >
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+
+          {/* NEW: Back to Upload Button */}
+          <button 
+            onClick={handleBackToUpload} 
+            className="btn-icon-header back-to-upload" 
+            title="Back to Upload"
+          >
+            <Upload size={18} />
+          </button>
           
-          <button onClick={logout} className="btn-icon-header logout" title="Logout">
+          <button 
+            onClick={logout} 
+            className="btn-icon-header logout" 
+            title="Logout"
+          >
             <LogOut size={18} />
           </button>
         </div>

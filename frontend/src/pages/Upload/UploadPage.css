@@ -107,6 +107,12 @@
   color: var(--primary-text);
 }
 
+.browse-btn-full {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 .start-btn {
   width: 100%;
   padding: 1rem;
@@ -140,3 +146,6 @@
   text-decoration: underline;
 }
 .logout-link:hover { color: var(--danger); }
+.hidden {
+  display: none;
+}

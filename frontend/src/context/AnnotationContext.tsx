@@ -32,6 +32,7 @@ interface AnnotationContextType {
   
   // Cache & NLP
   tokenCache: Map<string, string[]>;
+  suggestions: Map<string, string>;  // ADD THIS LINE
   inspectText: (text: string) => Promise<string[]>;
   
   // Actions
@@ -250,6 +251,27 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     });
   }, [audioFiles, correctData, incorrectData]);
 
+  // Create suggestions map from changes for O(1) lookup
+  const suggestions = useMemo(() => {
+    const map = new Map<string, string>();
+    changes.forEach(c => {
+      map.set(c.original, c.changed);
+    });
+    return map;
+  }, [changes]);
+
+  // --- Refresh/Unload Handler (Silent - No Browser Dialog) ---
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasStarted && audioFiles.length > 0) {
+        // Just return false to prevent default, don't show browser dialog
+        return false;
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasStarted, audioFiles.length]);
 
   return (
     <AnnotationContext.Provider value={{
@@ -259,7 +281,8 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       correctData, incorrectData, changes, pendingItems,
       isLoading, loadingMsg, setLoading,
       audioPath, setAudioPath, hasStarted, setHasStarted,
-      tokenCache, inspectText,
+      tokenCache, suggestions,  // ADD suggestions HERE
+      inspectText,
       handleDecision, handleCorrection,
       playAudio, playingFile, getFileName
     }}>

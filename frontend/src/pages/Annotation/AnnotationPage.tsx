@@ -9,7 +9,15 @@ import "./AnnotationPage.css";
 const ITEMS_PER_PAGE = 10;
 
 const AnnotationPage: React.FC = () => {
-  const { pendingItems, handleDecision, playAudio, playingFile, inspectText, tokenCache } = useAnnotation();
+  const { 
+    pendingItems, 
+    handleDecision, 
+    playAudio, 
+    playingFile, 
+    inspectText, 
+    tokenCache,
+    suggestions  // ADD THIS
+  } = useAnnotation();
   const [page, setPage] = useState(1);
   const [smartEdits, setSmartEdits] = useState<Record<string, Record<number, string>>>({});
   const [isGuideOpen, setIsGuideOpen] = useState(true);
@@ -114,6 +122,7 @@ const AnnotationPage: React.FC = () => {
                         text={item.text}
                         onInspect={inspectText}
                         tokens={tokens}
+                        suggestions={suggestions}  // ADD THIS LINE
                         appliedEdits={fileEdits}
                         onApplyCorrection={(i, word) => handleSmartCorrection(item.filename, i, word)}
                       />

@@ -32,6 +32,7 @@ const EditPage: React.FC = () => {
     playingFile,
     audioFiles,
     employeeId,
+    suggestions, // ADD THIS
   } = useAnnotation();
 
   const [page, setPage] = useState(1);
@@ -352,6 +353,7 @@ const EditPage: React.FC = () => {
                                   text={item.text} // Pass the original text
                                   onInspect={audioService.tokenize} // Pass the tokenize function
                                   tokens={itemTokens}
+                                  suggestions={suggestions} // ADD THIS LINE
                                 />
                               ) : (
                                 <div className="h-6 w-32 bg-slate-100 rounded animate-pulse"></div>
