@@ -1,0 +1,59 @@
+/* src/styles/variables.css */
+:root {
+  /* --- Palette --- */
+  --primary: #818cf8; 
+  --primary-soft: #c7d2fe;
+  --primary-bg: #eef2ff;
+  --primary-text: #4338ca;
+
+  --success: #34d399;
+  --success-soft: #d1fae5;
+  --success-bg: #ecfdf5;
+  --success-text: #065f46;
+
+  --danger: #fb7185;
+  --danger-soft: #fecdd3;
+  --danger-bg: #fff1f2;
+  --danger-text: #9f1239;
+
+  /* --- Light Theme (Default) --- */
+  --bg-app: #f8fafc;
+  --surface: #ffffff;
+  --text-main: #475569;
+  --text-light: #94a3b8;
+  --border: #f1f5f9;
+  --shadow-soft: 0 4px 20px -2px rgba(226, 232, 240, 0.6);
+
+  /* --- Common --- */
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* --- Dark Theme Override --- */
+[data-theme='dark'] {
+  --bg-app: #0f172a;
+  --surface: #1e293b;
+  --text-main: #f1f5f9;
+  --text-light: #94a3b8;
+  --border: #334155;
+
+  --primary-bg: #312e81;
+  --primary-text: #c7d2fe;
+  
+  --success-bg: #064e3b;
+  --success-text: #6ee7b7;
+
+  --danger-bg: #881337;
+  --danger-text: #fecdd3;
+  
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
