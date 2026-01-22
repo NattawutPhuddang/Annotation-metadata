@@ -28,6 +28,30 @@ import "./EditPage.css";
 
 const ITEMS_PER_PAGE = 10;
 
+// ✅ Component ใหม่: Textarea ที่ยืดหดตามข้อความอัตโนมัติ (ใส่ไว้ในไฟล์นี้ได้เลย)
+const AutoResizeTextarea: React.FC<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+> = (props) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // ปรับขนาดเมื่อค่า (value) เปลี่ยน หรือเมื่อโหลดครั้งแรก
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [props.value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      {...props}
+      rows={1}
+      style={{ overflow: "hidden", ...props.style }} // ซ่อน Scrollbar
+    />
+  );
+};
+
 const EditPage: React.FC = () => {
   const {
     incorrectData,
@@ -46,15 +70,29 @@ const EditPage: React.FC = () => {
   const [showLocalOnly, setShowLocalOnly] = useState(true);
   const [isGuideOpen, setIsGuideOpen] = useState(true);
 
-  // State เก็บคำแก้ไข (จนกว่าจะรีเฟรชหน้าจอ)
-  const [edits, setEdits] = useState<Record<string, string>>({});
+  // ✅ 1. โหลดข้อมูลที่พิมพ์ค้างไว้จาก LocalStorage (กันข้อมูลหาย)
+  const [edits, setEdits] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem("edit_drafts");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
-  // State สำหรับ Token Suggestions (Smart Edit)
+  // ✅ 2. โหลดข้อมูล Smart Edits (Token chips) ที่เลือกค้างไว้
   const [smartEditsMap, setSmartEditsMap] = useState<
     Record<string, Record<number, string>>
-  >({});
+  >(() => {
+    try {
+      const saved = localStorage.getItem("edit_smart_drafts");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
 
-  // --- Automation States (Load from LocalStorage) ---
+  // --- Automation States ---
   const [autoPlay, setAutoPlay] = useState(() =>
     JSON.parse(localStorage.getItem("edit_autoPlay") || "false"),
   );
@@ -62,15 +100,22 @@ const EditPage: React.FC = () => {
     JSON.parse(localStorage.getItem("edit_autoTokenize") || "false"),
   );
 
-  // Batch Mode State (Cut All)
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchTokens, setBatchTokens] = useState<Record<string, string[]>>({});
   const [isBatchLoading, setIsBatchLoading] = useState(false);
 
-  // Ref สำหรับ Auto Play
   const lastAutoPlayedRef = useRef<string | null>(null);
 
-  // Persistence Effects
+  // ✅ 3. บันทึกข้อมูลลง LocalStorage ทุกครั้งที่มีการแก้ไข
+  useEffect(() => {
+    localStorage.setItem("edit_drafts", JSON.stringify(edits));
+  }, [edits]);
+
+  useEffect(() => {
+    localStorage.setItem("edit_smart_drafts", JSON.stringify(smartEditsMap));
+  }, [smartEditsMap]);
+
+  // Persistence Effects (Settings)
   useEffect(() => {
     localStorage.setItem("edit_autoPlay", JSON.stringify(autoPlay));
   }, [autoPlay]);
@@ -78,7 +123,7 @@ const EditPage: React.FC = () => {
     localStorage.setItem("edit_autoTokenize", JSON.stringify(autoTokenize));
   }, [autoTokenize]);
 
-  // Reset Batch Mode เมื่อเปลี่ยนหน้า
+  // Reset Batch Mode
   useEffect(() => {
     setIsBatchMode(false);
   }, [page]);
@@ -95,13 +140,9 @@ const EditPage: React.FC = () => {
   // Logic กรองข้อมูล
   const filteredItems = useMemo(() => {
     let data = incorrectData;
-
-    // 1. Filter Local
     if (showLocalOnly) {
       data = data.filter((item) => fileMap.has(item.filename));
     }
-
-    // 2. Search
     if (searchTerm.trim()) {
       const lower = searchTerm.toLowerCase();
       data = data.filter(
@@ -110,7 +151,6 @@ const EditPage: React.FC = () => {
           item.text.toLowerCase().includes(lower),
       );
     }
-
     return data;
   }, [incorrectData, searchTerm, showLocalOnly, fileMap]);
 
@@ -120,16 +160,14 @@ const EditPage: React.FC = () => {
     page * ITEMS_PER_PAGE,
   );
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const firstItem = items[0]; // สำหรับ Auto Play
+  const firstItem = items[0];
 
   // --- Automation Logic ---
   useEffect(() => {
     if (!firstItem) return;
-
     const isNewFile = firstItem.filename !== lastAutoPlayedRef.current;
     if (isNewFile) {
       lastAutoPlayedRef.current = firstItem.filename;
-      // Auto Play Logic
       if (autoPlay) {
         setTimeout(() => {
           if (playingFile !== firstItem.filename) {
@@ -141,8 +179,6 @@ const EditPage: React.FC = () => {
   }, [firstItem, autoPlay, playingFile, playAudio]);
 
   // --- Handlers ---
-
-  // Toggle Cut All
   const toggleBatchMode = async () => {
     if (isBatchMode) {
       setIsBatchMode(false);
@@ -171,19 +207,36 @@ const EditPage: React.FC = () => {
     }
   };
 
-  // Logic การขยาย Token (เชื่อมกับ Cut All / Auto Cut)
   const shouldExpand = (idx: number) => {
     if (isBatchMode) return true;
     if (autoTokenize && idx === 0) return true;
     return false;
   };
 
-  // Key Handler for F2
+  // ✅ Key Handler: ปุ่ม Enter = Save
   const handleKey = (
     e: React.KeyboardEvent<HTMLTextAreaElement>,
-    filename: string,
+    item: AudioItem,
     val: string,
   ) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleCorrection(item, val);
+
+      // ล้างข้อมูลใน State และ LocalStorage อัตโนมัติ (ผ่าน useEffect)
+      setEdits((prev) => {
+        const c = { ...prev };
+        delete c[item.filename];
+        return c;
+      });
+      setSmartEditsMap((prev) => {
+        const c = { ...prev };
+        delete c[item.filename];
+        return c;
+      });
+      return;
+    }
+
     if (e.key === "F2" || (e.ctrlKey && e.key === "b")) {
       e.preventDefault();
       const input = e.currentTarget;
@@ -193,29 +246,22 @@ const EditPage: React.FC = () => {
 
       if (sel) {
         const newVal = val.substring(0, s) + `(${sel},)` + val.substring(end);
-        setEdits((prev) => ({ ...prev, [filename]: newVal }));
+        setEdits((prev) => ({ ...prev, [item.filename]: newVal }));
         setTimeout(() => {
           input.focus();
           input.setSelectionRange(s + sel.length + 2, s + sel.length + 2);
         }, 0);
       }
     }
+
     if (e.code === "Slash" && e.ctrlKey) setIsGuideOpen((prev) => !prev);
   };
 
-  // Textarea Auto-Resize
-  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    e.target.style.height = "auto";
-    e.target.style.height = `${e.target.scrollHeight}px`;
-  };
-
-  // Logic เมื่อกด Token Suggestion แล้วให้แก้ Textarea
   const handleSmartCorrection = (
     item: AudioItem,
     idx: number,
     newWord: string | null,
   ) => {
-    // 1. Update Smart Edits Map
     const currentFileEdits = { ...(smartEditsMap[item.filename] || {}) };
     if (newWord === null) delete currentFileEdits[idx];
     else currentFileEdits[idx] = newWord;
@@ -225,8 +271,6 @@ const EditPage: React.FC = () => {
       [item.filename]: currentFileEdits,
     }));
 
-    // 2. Reconstruct String & Update Textarea
-    // ต้องดึง Tokens เดิมมาประกอบร่างใหม่
     const tokens = tokenCache.get(item.text) || batchTokens[item.filename];
     if (tokens) {
       const newText = tokens.map((t, i) => currentFileEdits[i] || t).join("");
@@ -248,7 +292,6 @@ const EditPage: React.FC = () => {
   };
 
   const handleDownloadPersonal = async () => {
-    // แก้ไข: ดาวน์โหลด log ของงานที่ทำเสร็จแล้ว (Correct)
     const filename = `${employeeId}-Correct.tsv`;
     try {
       const data = await audioService.loadTSV(filename);
@@ -270,13 +313,25 @@ const EditPage: React.FC = () => {
   };
 
   const handleDelete = async (filename: string) => {
-    if (!window.confirm(`Delete "${filename}" to trash?`)) return;
+    if (!window.confirm(`Delete ${filename}?`)) return;
     try {
-      await audioService.moveToTrash(filename, 'fail.tsv');
-      // Clear edit state for this file
-      setEdits(prev => { const c = { ...prev }; delete c[filename]; return c; });
+      await audioService.deleteTsvEntry("fail.tsv", filename);
+
+      // ลบข้อมูลที่ค้างใน LocalStorage ด้วยถ้ามี
+      setEdits((prev) => {
+        const c = { ...prev };
+        delete c[filename];
+        return c;
+      });
+      setSmartEditsMap((prev) => {
+        const c = { ...prev };
+        delete c[filename];
+        return c;
+      });
+
+      window.location.reload();
     } catch (e) {
-      alert("Error deleting item: " + (e instanceof Error ? e.message : 'Unknown error'));
+      alert("Delete failed");
     }
   };
 
@@ -291,7 +346,6 @@ const EditPage: React.FC = () => {
                 <h2>Needs Correction</h2>
                 <span className="badge-count">{filteredItems.length}</span>
               </div>
-              {/* Filter Toggle */}
               <div className="filter-group">
                 <button
                   onClick={() => {
@@ -314,7 +368,6 @@ const EditPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Search Input */}
             <div className="search-wrapper">
               <Search size={16} className="search-icon" />
               <input
@@ -343,12 +396,9 @@ const EditPage: React.FC = () => {
           </div>
         </div>
 
-        {/* --- Toolbar Automation (เหมือน AnnotationPage) --- */}
         <div className="anno-toolbar">
           <div className="toolbar-left">
             <h2 className="toolbar-title">Workstation</h2>
-
-            {/* Toggle: Auto Play */}
             <label className="toggle-switch-wrapper">
               <input
                 type="checkbox"
@@ -360,12 +410,10 @@ const EditPage: React.FC = () => {
                 <FastForward
                   size={14}
                   className={autoPlay ? "text-indigo-600" : ""}
-                />
+                />{" "}
                 Auto Play
               </span>
             </label>
-
-            {/* Toggle: Auto Cut */}
             <label className="toggle-switch-wrapper">
               <input
                 type="checkbox"
@@ -384,14 +432,12 @@ const EditPage: React.FC = () => {
                   className={
                     autoTokenize && !isBatchMode ? "text-orange-500" : ""
                   }
-                />
+                />{" "}
                 Auto Cut
               </span>
             </label>
           </div>
-
           <div className="toolbar-right">
-            {/* Toggle: Cut All (Batch) */}
             <button
               onClick={toggleBatchMode}
               disabled={isBatchLoading}
@@ -409,7 +455,6 @@ const EditPage: React.FC = () => {
       </div>
 
       <div className="edit-layout">
-        {/* --- LEFT: Table --- */}
         <div className="main-panel">
           <div className="minimal-card mb-8">
             <table className="custom-table w-full">
@@ -426,7 +471,6 @@ const EditPage: React.FC = () => {
                     const val = edits[item.filename] ?? item.text;
                     const isModified = val !== item.text;
                     const isPlaying = playingFile === item.filename;
-
                     const tokens =
                       tokenCache.get(item.text) || batchTokens[item.filename];
                     const fileSmartEdits = smartEditsMap[item.filename] || {};
@@ -444,7 +488,6 @@ const EditPage: React.FC = () => {
 
                     return (
                       <tr key={item.filename}>
-                        {/* Audio Column */}
                         <td className="align-top">
                           <div className="audio-cell-content">
                             <div
@@ -491,10 +534,10 @@ const EditPage: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Edit Column */}
                         <td className="align-top">
                           <div className="edit-wrapper relative">
-                            <textarea
+                            {/* ✅ ใช้ AutoResizeTextarea แทน textarea ปกติ */}
+                            <AutoResizeTextarea
                               className="edit-textarea auto-expand"
                               value={val}
                               onChange={(e) => {
@@ -502,18 +545,12 @@ const EditPage: React.FC = () => {
                                   ...prev,
                                   [item.filename]: e.target.value,
                                 }));
-                                handleTextareaInput(e);
                               }}
-                              onKeyDown={(e) =>
-                                handleKey(e, item.filename, val)
-                              }
-                              onInput={handleTextareaInput}
+                              onKeyDown={(e) => handleKey(e, item, val)}
                               placeholder="Type correction here..."
                               spellCheck={false}
-                              // Set initial height logic via ref if needed, or simple CSS
                             />
 
-                            {/* ปุ่ม Undo ย้ายออกมาอยู่นอก Textarea */}
                             <button
                               className={`btn-reset-outside ${isModified ? "visible" : ""}`}
                               onClick={() => {
@@ -522,7 +559,6 @@ const EditPage: React.FC = () => {
                                   delete c[item.filename];
                                   return c;
                                 });
-                                // Reset Smart Edits too
                                 setSmartEditsMap((prev) => {
                                   const c = { ...prev };
                                   delete c[item.filename];
@@ -534,16 +570,14 @@ const EditPage: React.FC = () => {
                               <RotateCcw size={14} />
                             </button>
 
-                            {/* TokenizedText เชื่อมกับ Textarea */}
                             <div className="mt-3 pl-1 border-t border-slate-100 pt-2">
                               <TokenizedText
-                                text={item.text} // ใช้ text เดิมในการ Tokenize
+                                text={item.text}
                                 onInspect={inspectText}
                                 tokens={tokens}
                                 isExpanded={isExpanded}
                                 suggestions={suggestions}
                                 appliedEdits={fileSmartEdits}
-                                // เชื่อมต่อการกด Token -> อัปเดต Textarea
                                 onApplyCorrection={(i, word) =>
                                   handleSmartCorrection(item, i, word)
                                 }
@@ -552,19 +586,17 @@ const EditPage: React.FC = () => {
                           </div>
                         </td>
 
-                        {/* Save Column */}
                         <td className="align-middle text-center relative">
                           <button
                             className="btn-trash-float"
-                            title="Delete to trash"
-                            onClick={async (e) => {
-                            e.stopPropagation();
-                            await handleDelete(item.filename);
-                          }}
+                            title="Delete Item"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(item.filename);
+                            }}
                           >
                             <Trash2 size={14} />
                           </button>
-
                           <button
                             onClick={() => {
                               handleCorrection(item, val);
@@ -605,7 +637,6 @@ const EditPage: React.FC = () => {
               </tbody>
             </table>
           </div>
-
           <div className="flex justify-center">
             <Pagination
               currentPage={page}
@@ -615,7 +646,7 @@ const EditPage: React.FC = () => {
           </div>
         </div>
 
-        {/* --- RIGHT: Guideline Panel --- */}
+        {/* --- Guideline Panel --- */}
         <aside
           className={`guideline-panel ${!isGuideOpen ? "collapsed" : ""}`}
           onClick={() => !isGuideOpen && setIsGuideOpen(true)}
@@ -685,12 +716,6 @@ const EditPage: React.FC = () => {
             </div>
             <div className="shortcut-grid">
               <div className="shortcut-item">
-                <span className="flex items-center gap-2 text-slate-500">
-                  <Play size={12} /> Play
-                </span>
-                <span className="key-badge">Space</span>
-              </div>
-              <div className="shortcut-item">
                 <span className="flex items-center gap-2 text-orange-600">
                   Format
                 </span>
@@ -700,7 +725,7 @@ const EditPage: React.FC = () => {
                 <span className="flex items-center gap-2 text-primary">
                   Save
                 </span>
-                <span className="key-badge">Click</span>
+                <span className="key-badge">Enter</span>
               </div>
             </div>
           </div>
