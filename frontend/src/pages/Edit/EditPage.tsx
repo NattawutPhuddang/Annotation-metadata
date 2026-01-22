@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   Download,
   Filter,
@@ -13,6 +13,10 @@ import {
   BookOpen,
   ChevronsRight,
   Info,
+  FastForward,
+  Zap,
+  Layers,
+  Loader2,
 } from "lucide-react";
 import { useAnnotation } from "../../context/AnnotationContext";
 import { AudioItem } from "../../types";
@@ -32,15 +36,52 @@ const EditPage: React.FC = () => {
     playingFile,
     audioFiles,
     employeeId,
-    suggestions, // ADD THIS
+    tokenCache,
+    inspectText,
+    suggestions,
   } = useAnnotation();
 
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [showLocalOnly, setShowLocalOnly] = useState(true);
   const [isGuideOpen, setIsGuideOpen] = useState(true);
+
+  // State เก็บคำแก้ไข (จนกว่าจะรีเฟรชหน้าจอ)
   const [edits, setEdits] = useState<Record<string, string>>({});
-  const [tokensMap, setTokensMap] = useState<Record<string, string[]>>({});
+
+  // State สำหรับ Token Suggestions (Smart Edit)
+  const [smartEditsMap, setSmartEditsMap] = useState<
+    Record<string, Record<number, string>>
+  >({});
+
+  // --- Automation States (Load from LocalStorage) ---
+  const [autoPlay, setAutoPlay] = useState(() =>
+    JSON.parse(localStorage.getItem("edit_autoPlay") || "false"),
+  );
+  const [autoTokenize, setAutoTokenize] = useState(() =>
+    JSON.parse(localStorage.getItem("edit_autoTokenize") || "false"),
+  );
+
+  // Batch Mode State (Cut All)
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [batchTokens, setBatchTokens] = useState<Record<string, string[]>>({});
+  const [isBatchLoading, setIsBatchLoading] = useState(false);
+
+  // Ref สำหรับ Auto Play
+  const lastAutoPlayedRef = useRef<string | null>(null);
+
+  // Persistence Effects
+  useEffect(() => {
+    localStorage.setItem("edit_autoPlay", JSON.stringify(autoPlay));
+  }, [autoPlay]);
+  useEffect(() => {
+    localStorage.setItem("edit_autoTokenize", JSON.stringify(autoTokenize));
+  }, [autoTokenize]);
+
+  // Reset Batch Mode เมื่อเปลี่ยนหน้า
+  useEffect(() => {
+    setIsBatchMode(false);
+  }, [page]);
 
   // Map Local Files
   const fileMap = useMemo(() => {
@@ -79,29 +120,63 @@ const EditPage: React.FC = () => {
     page * ITEMS_PER_PAGE,
   );
   const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
+  const firstItem = items[0]; // สำหรับ Auto Play
 
-  // Effect: โหลด Tokens
+  // --- Automation Logic ---
   useEffect(() => {
-    const fetchTokens = async () => {
-      const itemsToFetch = items.filter((i) => !tokensMap[i.filename]);
-      if (itemsToFetch.length === 0) return;
+    if (!firstItem) return;
 
-      try {
-        const texts = itemsToFetch.map((i) => i.text);
-        const results = await audioService.tokenizeBatch(texts);
-        setTokensMap((prev) => {
-          const next = { ...prev };
-          itemsToFetch.forEach((item, idx) => {
-            next[item.filename] = results[idx] || [];
-          });
-          return next;
-        });
-      } catch (err) {
-        console.error("Failed to load tokens", err);
+    const isNewFile = firstItem.filename !== lastAutoPlayedRef.current;
+    if (isNewFile) {
+      lastAutoPlayedRef.current = firstItem.filename;
+      // Auto Play Logic
+      if (autoPlay) {
+        setTimeout(() => {
+          if (playingFile !== firstItem.filename) {
+            playAudio(firstItem);
+          }
+        }, 300);
       }
-    };
-    fetchTokens();
-  }, [items, tokensMap]);
+    }
+  }, [firstItem, autoPlay, playingFile, playAudio]);
+
+  // --- Handlers ---
+
+  // Toggle Cut All
+  const toggleBatchMode = async () => {
+    if (isBatchMode) {
+      setIsBatchMode(false);
+    } else {
+      if (items.length === 0) return;
+      setIsBatchLoading(true);
+      try {
+        const itemsToFetch = items.filter(
+          (i) => !tokenCache.has(i.text) && !batchTokens[i.filename],
+        );
+        if (itemsToFetch.length > 0) {
+          const texts = itemsToFetch.map((i) => i.text);
+          const results = await audioService.tokenizeBatch(texts);
+          const newBatch: Record<string, string[]> = {};
+          itemsToFetch.forEach((item, idx) => {
+            if (results[idx]) newBatch[item.filename] = results[idx];
+          });
+          setBatchTokens((prev) => ({ ...prev, ...newBatch }));
+        }
+        setIsBatchMode(true);
+      } catch (error) {
+        console.error("Batch tokenize failed", error);
+      } finally {
+        setIsBatchLoading(false);
+      }
+    }
+  };
+
+  // Logic การขยาย Token (เชื่อมกับ Cut All / Auto Cut)
+  const shouldExpand = (idx: number) => {
+    if (isBatchMode) return true;
+    if (autoTokenize && idx === 0) return true;
+    return false;
+  };
 
   // Key Handler for F2
   const handleKey = (
@@ -128,6 +203,37 @@ const EditPage: React.FC = () => {
     if (e.code === "Slash" && e.ctrlKey) setIsGuideOpen((prev) => !prev);
   };
 
+  // Textarea Auto-Resize
+  const handleTextareaInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    e.target.style.height = "auto";
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
+
+  // Logic เมื่อกด Token Suggestion แล้วให้แก้ Textarea
+  const handleSmartCorrection = (
+    item: AudioItem,
+    idx: number,
+    newWord: string | null,
+  ) => {
+    // 1. Update Smart Edits Map
+    const currentFileEdits = { ...(smartEditsMap[item.filename] || {}) };
+    if (newWord === null) delete currentFileEdits[idx];
+    else currentFileEdits[idx] = newWord;
+
+    setSmartEditsMap((prev) => ({
+      ...prev,
+      [item.filename]: currentFileEdits,
+    }));
+
+    // 2. Reconstruct String & Update Textarea
+    // ต้องดึง Tokens เดิมมาประกอบร่างใหม่
+    const tokens = tokenCache.get(item.text) || batchTokens[item.filename];
+    if (tokens) {
+      const newText = tokens.map((t, i) => currentFileEdits[i] || t).join("");
+      setEdits((prev) => ({ ...prev, [item.filename]: newText }));
+    }
+  };
+
   const handleDownload = (data: AudioItem[], filename: string) => {
     const content =
       "filename\ttext\n" +
@@ -142,11 +248,12 @@ const EditPage: React.FC = () => {
   };
 
   const handleDownloadPersonal = async () => {
-    const filename = `${employeeId}-fail.tsv`;
+    // แก้ไข: ดาวน์โหลด log ของงานที่ทำเสร็จแล้ว (Correct)
+    const filename = `${employeeId}-Correct.tsv`;
     try {
       const data = await audioService.loadTSV(filename);
       if (!data || data.length === 0) {
-        alert("Personal log not found.");
+        alert("Personal log not found or empty.");
         return;
       }
       const content =
@@ -174,59 +281,129 @@ const EditPage: React.FC = () => {
 
   return (
     <div className="edit-container animate-fade-in">
-      {/* Header Section */}
-      <div className="edit-header">
-        <div className="header-left">
-          <div className="header-title-row">
-            <div className="header-title">
-              <h2>Needs Correction</h2>
-              <span className="badge-count">{filteredItems.length}</span>
+      {/* --- Header & Toolbar --- */}
+      <div className="edit-header-wrapper">
+        <div className="edit-header">
+          <div className="header-left">
+            <div className="header-title-row">
+              <div className="header-title">
+                <h2>Needs Correction</h2>
+                <span className="badge-count">{filteredItems.length}</span>
+              </div>
+              {/* Filter Toggle */}
+              <div className="filter-group">
+                <button
+                  onClick={() => {
+                    setShowLocalOnly(true);
+                    setPage(1);
+                  }}
+                  className={`btn-filter ${showLocalOnly ? "active" : ""}`}
+                >
+                  <Filter size={14} /> Local Audio
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLocalOnly(false);
+                    setPage(1);
+                  }}
+                  className={`btn-filter ${!showLocalOnly ? "active" : ""}`}
+                >
+                  Show All History
+                </button>
+              </div>
             </div>
-            <div className="filter-group">
-              <button
-                onClick={() => {
-                  setShowLocalOnly(true);
+
+            {/* Search Input */}
+            <div className="search-wrapper">
+              <Search size={16} className="search-icon" />
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search filename or transcript..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
                   setPage(1);
                 }}
-                className={`btn-filter ${showLocalOnly ? "active" : ""}`}
-              >
-                <Filter size={14} /> Local Audio
-              </button>
-              <button
-                onClick={() => {
-                  setShowLocalOnly(false);
-                  setPage(1);
-                }}
-                className={`btn-filter ${!showLocalOnly ? "active" : ""}`}
-              >
-                Show All History
-              </button>
+              />
             </div>
           </div>
-          <div className="search-wrapper">
-            <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Search filename or transcript..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
-            />
+
+          <div className="header-actions">
+            <button onClick={handleDownloadPersonal} className="btn-download">
+              <FileText size={16} /> Export My Log
+            </button>
+            <button
+              onClick={() => handleDownload(incorrectData, "fail.tsv")}
+              className="btn-download"
+            >
+              <Download size={16} /> Export All Data
+            </button>
           </div>
         </div>
-        <div className="header-actions">
-          <button onClick={handleDownloadPersonal} className="btn-download">
-            <FileText size={16} /> Export My Log TSV
-          </button>
-          <button
-            onClick={() => handleDownload(incorrectData, "fail.tsv")}
-            className="btn-download"
-          >
-            <Download size={16} /> Export All Data
-          </button>
+
+        {/* --- Toolbar Automation (เหมือน AnnotationPage) --- */}
+        <div className="anno-toolbar">
+          <div className="toolbar-left">
+            <h2 className="toolbar-title">Workstation</h2>
+
+            {/* Toggle: Auto Play */}
+            <label className="toggle-switch-wrapper">
+              <input
+                type="checkbox"
+                checked={autoPlay}
+                onChange={(e) => setAutoPlay(e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+              <span className="toggle-label">
+                <FastForward
+                  size={14}
+                  className={autoPlay ? "text-indigo-600" : ""}
+                />
+                Auto Play
+              </span>
+            </label>
+
+            {/* Toggle: Auto Cut */}
+            <label className="toggle-switch-wrapper">
+              <input
+                type="checkbox"
+                checked={autoTokenize}
+                onChange={(e) => setAutoTokenize(e.target.checked)}
+                disabled={isBatchMode}
+              />
+              <span
+                className={`toggle-slider ${isBatchMode ? "disabled" : ""}`}
+              ></span>
+              <span
+                className={`toggle-label ${isBatchMode ? "opacity-50" : ""}`}
+              >
+                <Zap
+                  size={14}
+                  className={
+                    autoTokenize && !isBatchMode ? "text-orange-500" : ""
+                  }
+                />
+                Auto Cut
+              </span>
+            </label>
+          </div>
+
+          <div className="toolbar-right">
+            {/* Toggle: Cut All (Batch) */}
+            <button
+              onClick={toggleBatchMode}
+              disabled={isBatchLoading}
+              className={`btn-batch-toggle ${isBatchMode ? "active" : ""}`}
+            >
+              {isBatchLoading ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Layers size={16} />
+              )}
+              <span>Cut All {isBatchMode ? "(ON)" : "(OFF)"}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -237,7 +414,6 @@ const EditPage: React.FC = () => {
             <table className="custom-table w-full">
               <thead>
                 <tr>
-                  {/* กำหนดความกว้างให้ชัดเจน */}
                   <th className="w-[35%]">Audio</th>
                   <th className="w-auto">Correction</th>
                   <th className="w-[100px] text-center">Save</th>
@@ -245,11 +421,15 @@ const EditPage: React.FC = () => {
               </thead>
               <tbody>
                 {items.length > 0 ? (
-                  items.map((item) => {
+                  items.map((item, idx) => {
                     const val = edits[item.filename] ?? item.text;
                     const isModified = val !== item.text;
                     const isPlaying = playingFile === item.filename;
-                    const itemTokens = tokensMap[item.filename] || [];
+
+                    const tokens =
+                      tokenCache.get(item.text) || batchTokens[item.filename];
+                    const fileSmartEdits = smartEditsMap[item.filename] || {};
+                    const isExpanded = shouldExpand(idx);
 
                     let src = item.audioPath;
                     if (!src) src = fileMap.get(item.filename);
@@ -259,7 +439,6 @@ const EditPage: React.FC = () => {
                       !src.startsWith("http")
                     )
                       src = audioService.getAudioUrl(src);
-
                     const hasAudio = src && src !== "";
 
                     return (
@@ -313,58 +492,67 @@ const EditPage: React.FC = () => {
 
                         {/* Edit Column */}
                         <td className="align-top">
-                          <div className="edit-wrapper">
+                          <div className="edit-wrapper relative">
                             <textarea
-                              className="edit-textarea"
+                              className="edit-textarea auto-expand"
                               value={val}
-                              onChange={(e) =>
+                              onChange={(e) => {
                                 setEdits((prev) => ({
                                   ...prev,
                                   [item.filename]: e.target.value,
-                                }))
-                              }
+                                }));
+                                handleTextareaInput(e);
+                              }}
                               onKeyDown={(e) =>
                                 handleKey(e, item.filename, val)
                               }
+                              onInput={handleTextareaInput}
                               placeholder="Type correction here..."
                               spellCheck={false}
+                              // Set initial height logic via ref if needed, or simple CSS
                             />
+
+                            {/* ปุ่ม Undo ย้ายออกมาอยู่นอก Textarea */}
                             <button
-                              className={`btn-reset ${isModified ? "visible" : ""}`}
-                              onClick={() =>
+                              className={`btn-reset-outside ${isModified ? "visible" : ""}`}
+                              onClick={() => {
                                 setEdits((prev) => {
                                   const c = { ...prev };
                                   delete c[item.filename];
                                   return c;
-                                })
-                              }
+                                });
+                                // Reset Smart Edits too
+                                setSmartEditsMap((prev) => {
+                                  const c = { ...prev };
+                                  delete c[item.filename];
+                                  return c;
+                                });
+                              }}
                               title="Reset to original"
                             >
                               <RotateCcw size={14} />
                             </button>
 
-                            {/* ✅ ย้าย TokenizedText มาไว้ด้านล่าง Textarea */}
+                            {/* TokenizedText เชื่อมกับ Textarea */}
                             <div className="mt-3 pl-1 border-t border-slate-100 pt-2">
-                              <div className="text-xs text-slate-400 mb-2 font-semibold tracking-wider flex items-center gap-2">
-                                <span>CURRENT TOKENS</span>
-                              </div>
-                              {itemTokens.length > 0 ? (
-                                <TokenizedText
-                                  text={item.text} // Pass the original text
-                                  onInspect={audioService.tokenize} // Pass the tokenize function
-                                  tokens={itemTokens}
-                                  suggestions={suggestions} // ADD THIS LINE
-                                />
-                              ) : (
-                                <div className="h-6 w-32 bg-slate-100 rounded animate-pulse"></div>
-                              )}
+                              <TokenizedText
+                                text={item.text} // ใช้ text เดิมในการ Tokenize
+                                onInspect={inspectText}
+                                tokens={tokens}
+                                isExpanded={isExpanded}
+                                suggestions={suggestions}
+                                appliedEdits={fileSmartEdits}
+                                // เชื่อมต่อการกด Token -> อัปเดต Textarea
+                                onApplyCorrection={(i, word) =>
+                                  handleSmartCorrection(item, i, word)
+                                }
+                              />
                             </div>
                           </div>
                         </td>
 
                         {/* Save Column */}
                         <td className="align-middle text-center relative">
-                          {/* ✅ ย้าย Trash Button มาไว้ใน td เพื่อไม่ให้ Layout พัง */}
                           <button
                             className="btn-trash-float"
                             title="Delete Item"
@@ -380,6 +568,11 @@ const EditPage: React.FC = () => {
                             onClick={() => {
                               handleCorrection(item, val);
                               setEdits((prev) => {
+                                const c = { ...prev };
+                                delete c[item.filename];
+                                return c;
+                              });
+                              setSmartEditsMap((prev) => {
                                 const c = { ...prev };
                                 delete c[item.filename];
                                 return c;
@@ -473,7 +666,7 @@ const EditPage: React.FC = () => {
               <div>
                 เสียงซ้อน{" "}
                 <span className="highlight bg-red-50 text-red-600 border-red-200">
-                  &lt;IGNORE&gt;
+                  ทิ้งถังขยะ
                 </span>
               </div>
             </div>
