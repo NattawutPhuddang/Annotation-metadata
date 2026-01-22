@@ -18,6 +18,7 @@ import { WaveformPlayer } from "../../components/AudioPlayer/WaveformPlayer";
 import { TokenizedText } from "../../components/Tokenizer/TokenizedText";
 import { Pagination } from "../../components/Shared/Pagination";
 import { audioService } from "../../api/audioService";
+import { audioService } from "../../api/audioService";
 import "./AnnotationPage.css";
 
 const ITEMS_PER_PAGE = 10;
@@ -30,7 +31,7 @@ const AnnotationPage: React.FC = () => {
     playingFile,
     inspectText,
     tokenCache,
-    suggestions,
+    suggestions,  // ADD THIS
   } = useAnnotation();
 
   const [page, setPage] = useState(1);
@@ -342,10 +343,18 @@ const AnnotationPage: React.FC = () => {
                       <div className="action-wrapper">
                         <button
                           className="btn-trash-float"
-                          title="Delete"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            alert("Delete Logic");
+                          title="Delete to trash"
+                          onClick={async (e) => { 
+                            e.stopPropagation(); 
+                            if (window.confirm(`Delete "${item.filename}" to trash?`)) {
+                              try {
+                                await audioService.moveToTrash(item.filename, 'Correct.tsv');
+                                // Logic จะอัปเดตอัตโนมัติเมื่อ pendingItems เปลี่ยน
+                                setSmartEdits(prev => { const n={...prev}; delete n[item.filename]; return n; });
+                              } catch (error) {
+                                alert("Error deleting item: " + (error instanceof Error ? error.message : 'Unknown error'));
+                              }
+                            }
                           }}
                         >
                           <Trash2 size={12} />

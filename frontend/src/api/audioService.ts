@@ -39,6 +39,15 @@ export const audioService = {
       return [];
     }
   },
+  async moveToTrash(filename: string, sourceFile: string = 'Correct.tsv') {
+    const res = await fetch(`${API_BASE}/api/move-to-trash`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename, sourceFile }),
+    });
+    if (!res.ok) throw new Error('Failed to move to trash');
+    return res.json();
+  },
 
   async checkFileMtime(filename: string): Promise<number> {
     try {

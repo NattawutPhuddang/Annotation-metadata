@@ -270,12 +270,13 @@ const EditPage: React.FC = () => {
   };
 
   const handleDelete = async (filename: string) => {
-    if (!window.confirm(`Delete ${filename}?`)) return;
+    if (!window.confirm(`Delete "${filename}" to trash?`)) return;
     try {
-      await audioService.deleteTsvEntry("fail.tsv", filename);
-      window.location.reload();
+      await audioService.moveToTrash(filename, 'fail.tsv');
+      // Clear edit state for this file
+      setEdits(prev => { const c = { ...prev }; delete c[filename]; return c; });
     } catch (e) {
-      alert("Delete failed");
+      alert("Error deleting item: " + (e instanceof Error ? e.message : 'Unknown error'));
     }
   };
 
@@ -555,11 +556,11 @@ const EditPage: React.FC = () => {
                         <td className="align-middle text-center relative">
                           <button
                             className="btn-trash-float"
-                            title="Delete Item"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(item.filename);
-                            }}
+                            title="Delete to trash"
+                            onClick={async (e) => {
+                            e.stopPropagation();
+                            await handleDelete(item.filename);
+                          }}
                           >
                             <Trash2 size={14} />
                           </button>

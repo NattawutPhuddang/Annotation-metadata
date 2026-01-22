@@ -447,6 +447,89 @@ app.get('/api/check-mtime', async (req, res) => {
   }
 });
 
+// ✅ Move to Trash - Move item to trash.tsv and remove from correct/fail
+app.post('/api/move-to-trash', async (req, res) => {
+  const { filename, sourceFile } = req.body; // sourceFile: "Correct.tsv" หรือ "fail.tsv"
+  
+  try {
+    const sourceFilePath = getFilePath(sourceFile || 'Correct.tsv');
+    const trashFilePath = getFilePath('trash.tsv');
+
+    await acquireLock(sourceFilePath); // 🔒 Lock source file
+    await acquireLock(trashFilePath); // 🔒 Lock trash file
+    
+    try {
+      // 1. Read source file to get the item
+      let itemToTrash = null;
+      let rows: {filename: string, text: string}[] = [];
+      
+      try {
+        const content = await fs.promises.readFile(sourceFilePath, 'utf8');
+        const lines = content.split('\n');
+        const header = lines[0];
+        
+        rows = lines
+          .slice(1)
+          .filter(line => line.trim() !== '')
+          .map(line => {
+            const parts = line.split('\t');
+            return { filename: parts[0], text: parts.slice(1).join('\t') };
+          })
+          .filter(row => row.filename);
+        
+        // Find and remove the item
+        const index = rows.findIndex(r => r.filename === filename);
+        if (index !== -1) {
+          itemToTrash = rows[index];
+          rows.splice(index, 1);
+        }
+      } catch (readErr) {
+        return res.status(404).send('Source file not found');
+      }
+
+      if (!itemToTrash) {
+        return res.status(404).send('Item not found');
+      }
+
+      // 2. Write back to source file without the deleted item
+      const newContent = 'filename\ttext\n' + rows.map(r => `${r.filename}\t${r.text}`).join('\n');
+      await fs.promises.writeFile(sourceFilePath, newContent, 'utf8');
+
+      // 3. Append to trash.tsv
+      try {
+        const trashContent = await fs.promises.readFile(trashFilePath, 'utf8');
+        const trashRows = trashContent.split('\n')
+          .slice(1)
+          .filter(line => line.trim() !== '')
+          .map(line => {
+            const parts = line.split('\t');
+            return { filename: parts[0], text: parts.slice(1).join('\t') };
+          })
+          .filter(row => row.filename);
+        
+        trashRows.push(itemToTrash);
+        const newTrashContent = 'filename\ttext\n' + trashRows.map(r => `${r.filename}\t${r.text}`).join('\n');
+        await fs.promises.writeFile(trashFilePath, newTrashContent, 'utf8');
+      } catch (trashErr) {
+        // If trash.tsv doesn't exist, create it
+        const newTrashContent = 'filename\ttext\n' + `${itemToTrash.filename}\t${itemToTrash.text}`;
+        await fs.promises.writeFile(trashFilePath, newTrashContent, 'utf8');
+      }
+
+      res.json({ success: true, message: 'Moved to trash' });
+
+    } finally {
+      releaseLock(sourceFilePath); // 🔓 Unlock
+      releaseLock(trashFilePath); // 🔓 Unlock
+    }
+
+  } catch (err: any) {
+    console.error('Move to trash error:', err);
+    if (err.message.includes("Security")) return res.status(403).send(err.message);
+    res.status(500).send('Error moving to trash');
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running: http://10.2.98.118:3003:${PORT}`);
 });
