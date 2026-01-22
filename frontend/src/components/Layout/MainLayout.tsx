@@ -58,7 +58,7 @@ const MainLayout: React.FC = () => {
 
         {/* Navigation Pills */}
         <nav className="nav-pills">
-          {(["pending", "correct", "fail"] as Tab[]).map((t) => (
+          {(["pending", "fail", "correct"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setCurrentTab(t)}

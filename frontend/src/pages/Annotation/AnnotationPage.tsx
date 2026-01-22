@@ -141,8 +141,8 @@ const AnnotationPage: React.FC = () => {
                             if (window.confirm(`Delete "${item.filename}" to trash?`)) {
                               try {
                                 await audioService.moveToTrash(item.filename, 'Correct.tsv');
-                                // อัปเดต state เพื่อให้รายการลบออกจากรายการที่พิจารณา
-                                await handleDecision(item, 'incorrect');
+                                // Logic จะอัปเดตอัตโนมัติเมื่อ pendingItems เปลี่ยน
+                                setSmartEdits(prev => { const n={...prev}; delete n[item.filename]; return n; });
                               } catch (error) {
                                 alert("Error deleting item: " + (error instanceof Error ? error.message : 'Unknown error'));
                               }

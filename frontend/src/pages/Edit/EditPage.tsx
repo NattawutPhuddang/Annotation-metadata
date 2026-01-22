@@ -166,9 +166,8 @@ const EditPage: React.FC = () => {
     if (!window.confirm(`Delete "${filename}" to trash?`)) return;
     try {
       await audioService.moveToTrash(filename, 'fail.tsv');
-      // อัปเดต state เพื่อให้รายการลบออก
-      await handleCorrection({ filename, text: '' } as AudioItem, '');
-      window.location.reload();
+      // Clear edit state for this file
+      setEdits(prev => { const c = { ...prev }; delete c[filename]; return c; });
     } catch (e) {
       alert("Error deleting item: " + (e instanceof Error ? e.message : 'Unknown error'));
     }
@@ -371,16 +370,9 @@ const EditPage: React.FC = () => {
                             className="btn-trash-float"
                             title="Delete to trash"
                             onClick={async (e) => {
-                              e.stopPropagation();
-                              if (window.confirm(`Delete "${item.filename}" to trash?`)) {
-                                try {
-                                  await audioService.moveToTrash(item.filename, 'fail.tsv');
-                                  window.location.reload();
-                                } catch (error) {
-                                  alert("Error deleting item: " + (error instanceof Error ? error.message : 'Unknown error'));
-                                }
-                              }
-                            }}
+                            e.stopPropagation();
+                            await handleDelete(item.filename);
+                          }}
                           >
                             <Trash2 size={14} />
                           </button>

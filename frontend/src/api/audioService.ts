@@ -39,7 +39,7 @@ export const audioService = {
       return [];
     }
   },
-    async moveToTrash(filename: string, sourceFile: string = 'Correct.tsv') {
+  async moveToTrash(filename: string, sourceFile: string = 'Correct.tsv') {
     const res = await fetch(`${API_BASE}/api/move-to-trash`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
