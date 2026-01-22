@@ -56,6 +56,7 @@ export const WaveformPlayer: React.FC<Props> = ({
       url: cleanUrl,
       normalize: true, // ปรับเสียงให้กราฟดูเต็มสวย
       interact: true,  // ให้ลาก Seek ได้
+      dragToSeek: true,
     });
 
     wavesurfer.current = ws;
@@ -96,7 +97,7 @@ export const WaveformPlayer: React.FC<Props> = ({
         console.error("WaveSurfer error", e);
     }
   }, [isPlaying]);
-
+  
   // Format Time (MM:SS)
   const formatTime = (t: number) => {
     if (!t || isNaN(t)) return "0:00";
