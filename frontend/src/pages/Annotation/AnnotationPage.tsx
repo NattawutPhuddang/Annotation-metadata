@@ -18,7 +18,6 @@ import { WaveformPlayer } from "../../components/AudioPlayer/WaveformPlayer";
 import { TokenizedText } from "../../components/Tokenizer/TokenizedText";
 import { Pagination } from "../../components/Shared/Pagination";
 import { audioService } from "../../api/audioService";
-import { audioService } from "../../api/audioService";
 import "./AnnotationPage.css";
 
 const ITEMS_PER_PAGE = 10;
