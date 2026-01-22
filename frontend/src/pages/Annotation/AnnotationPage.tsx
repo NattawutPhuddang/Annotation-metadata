@@ -19,6 +19,7 @@ import { WaveformPlayer } from "../../components/AudioPlayer/WaveformPlayer";
 import { TokenizedText } from "../../components/Tokenizer/TokenizedText";
 import { Pagination } from "../../components/Shared/Pagination";
 import { audioService } from "../../api/audioService";
+import { Modal } from "../../components/Shared/Modal";
 import "./AnnotationPage.css";
 
 const ITEMS_PER_PAGE = 10;
@@ -53,6 +54,7 @@ const AnnotationPage: React.FC = () => {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const [batchTokens, setBatchTokens] = useState<Record<string, string[]>>({});
   const [isBatchLoading, setIsBatchLoading] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<any | null>(null);
 
   // Ref ป้องกัน Auto Play ทำงานซ้ำซ้อน
   const lastAutoPlayedRef = useRef<string | null>(null);
@@ -132,6 +134,26 @@ const AnnotationPage: React.FC = () => {
       } finally {
         setIsBatchLoading(false);
       }
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+
+    try {
+      // Step A: บันทึกลง trash.tsv
+      await audioService.appendTsv('trash.tsv', itemToDelete);
+      
+      // Step B: ลบออกจากหน้าจอ
+      setAudioFiles(prev => prev.filter(f => f.filename !== itemToDelete.filename));
+
+      // Cleanup
+      setSmartEdits(prev => { const n={...prev}; delete n[itemToDelete.filename]; return n; });
+      
+    } catch (error) {
+      alert("Error deleting item");
+    } finally {
+      setItemToDelete(null); // ปิด Modal
     }
   };
 
@@ -347,6 +369,7 @@ const AnnotationPage: React.FC = () => {
                         title="Delete to trash"
                         onClick={async (e) => { 
                           e.stopPropagation(); 
+                          setItemToDelete(item);
                           if (window.confirm(`Delete "${item.filename}" to trash?`)) {
                             try {
                               // Step 1: ยิง API บันทึกลง trash.tsv โดยตรง
@@ -490,6 +513,25 @@ const AnnotationPage: React.FC = () => {
           </div>
         </aside>
       </div>
+      <Modal
+        isOpen={!!itemToDelete}
+        type="confirm"
+        title="Confirm Deletion"
+        message={`Are you sure you want to move "${itemToDelete?.filename}" to trash?`}
+        onClose={() => setItemToDelete(null)}
+        actions={[
+          {
+            label: "Cancel",
+            onClick: () => setItemToDelete(null),
+            variant: "secondary",
+          },
+          {
+            label: "Delete",
+            onClick: handleConfirmDelete,
+            variant: "danger", // สีแดง
+          },
+        ]}
+      />
     </div>
   );
 };

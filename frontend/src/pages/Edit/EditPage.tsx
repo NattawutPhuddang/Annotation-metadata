@@ -24,6 +24,7 @@ import { Pagination } from "../../components/Shared/Pagination";
 import { WaveformPlayer } from "../../components/AudioPlayer/WaveformPlayer";
 import { TokenizedText } from "../../components/Tokenizer/TokenizedText";
 import { audioService } from "../../api/audioService";
+import { Modal } from "../../components/Shared/Modal";
 import "./EditPage.css";
 
 const ITEMS_PER_PAGE = 10;
@@ -70,6 +71,7 @@ const EditPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showLocalOnly, setShowLocalOnly] = useState(true);
   const [isGuideOpen, setIsGuideOpen] = useState(true);
+  const [fileToDelete, setFileToDelete] = useState<string | null>(null);
 
   // ✅ 1. โหลดข้อมูลที่พิมพ์ค้างไว้จาก LocalStorage (กันข้อมูลหาย)
   const [edits, setEdits] = useState<Record<string, string>>(() => {
@@ -181,6 +183,27 @@ const EditPage: React.FC = () => {
       }
     }
   }, [firstItem, autoPlay, playingFile, playAudio]);
+
+  const handleConfirmDelete = async () => {
+    if (!fileToDelete) return;
+
+    try {
+      // สั่ง Backend ย้ายไฟล์
+      await audioService.moveToTrash(fileToDelete, 'fail.tsv');
+
+      // ลบข้อมูล local state
+      setEdits((prev) => { const c = { ...prev }; delete c[fileToDelete]; return c; });
+      setSmartEditsMap((prev) => { const c = { ...prev }; delete c[fileToDelete]; return c; });
+
+      // ลบออกจากหน้าจอ
+      setIncorrectData((prev) => prev.filter((item) => item.filename !== fileToDelete));
+
+    } catch (e) {
+      alert("Delete failed");
+    } finally {
+      setFileToDelete(null); // ปิด Modal
+    }
+  };
 
   // --- Handlers ---
   const toggleBatchMode = async () => {
@@ -604,6 +627,7 @@ const EditPage: React.FC = () => {
                             title="Delete Item"
                             onClick={(e) => {
                               e.stopPropagation();
+                              setFileToDelete(item.filename);
                               handleDelete(item.filename);
                             }}
                           >
@@ -743,6 +767,25 @@ const EditPage: React.FC = () => {
           </div>
         </aside>
       </div>
+    <Modal
+        isOpen={!!fileToDelete}
+        type="confirm"
+        title="Confirm Deletion"
+        message={`Delete "${fileToDelete}" permanently?`}
+        onClose={() => setFileToDelete(null)}
+        actions={[
+          {
+            label: "Cancel",
+            onClick: () => setFileToDelete(null),
+            variant: "secondary",
+          },
+          {
+            label: "Delete",
+            onClick: handleConfirmDelete,
+            variant: "danger",
+          },
+        ]}
+      />
     </div>
   );
 };
