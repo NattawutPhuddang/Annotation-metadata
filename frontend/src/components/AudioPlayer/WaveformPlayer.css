@@ -51,7 +51,11 @@
 .waveform-slider::-webkit-slider-thumb:hover {
   transform: scale(1.2);
 }
-
+.waveform-wrapper {
+  position: relative;
+  /* ป้องกันการกระตุกของความสูง */
+  min-height: 24px; 
+}
 .waveform-slider::-moz-range-thumb {
   height: 12px;
   width: 12px;

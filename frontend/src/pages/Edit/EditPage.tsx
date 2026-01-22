@@ -110,8 +110,6 @@ const EditPage: React.FC = () => {
 
   const lastAutoPlayedRef = useRef<string | null>(null);
 
-  
-
   // ✅ 3. บันทึกข้อมูลลง LocalStorage ทุกครั้งที่มีการแก้ไข
   useEffect(() => {
     localStorage.setItem("edit_drafts", JSON.stringify(edits));
@@ -134,7 +132,6 @@ const EditPage: React.FC = () => {
     setIsBatchMode(false);
   }, [page]);
 
- 
   // Map Local Files
   const fileMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -190,15 +187,24 @@ const EditPage: React.FC = () => {
 
     try {
       // สั่ง Backend ย้ายไฟล์
-      await audioService.moveToTrash(fileToDelete, 'fail.tsv');
+      await audioService.moveToTrash(fileToDelete, "fail.tsv");
 
       // ลบข้อมูล local state
-      setEdits((prev) => { const c = { ...prev }; delete c[fileToDelete]; return c; });
-      setSmartEditsMap((prev) => { const c = { ...prev }; delete c[fileToDelete]; return c; });
+      setEdits((prev) => {
+        const c = { ...prev };
+        delete c[fileToDelete];
+        return c;
+      });
+      setSmartEditsMap((prev) => {
+        const c = { ...prev };
+        delete c[fileToDelete];
+        return c;
+      });
 
       // ลบออกจากหน้าจอ
-      setIncorrectData((prev) => prev.filter((item) => item.filename !== fileToDelete));
-
+      setIncorrectData((prev) =>
+        prev.filter((item) => item.filename !== fileToDelete),
+      );
     } catch (e) {
       // alert("Delete failed");
     } finally {
@@ -340,11 +346,48 @@ const EditPage: React.FC = () => {
     }
   };
 
-   const handleDelete = async (filename: string) => {
+  const handleDelete = async (filename: string) => {
     setFileToDelete(filename);
   };
 
-  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat) return; // ป้องกันการกดค้างแล้วรวน
+
+      if (e.code === "ShiftRight") {
+        // e.preventDefault(); // ไม่ต้องใส่ เพื่อให้ยังใช้พิมพ์ตัวใหญ่ได้ถ้าต้องการ
+
+        // กรณี 1: ถ้ามีไฟล์กำลังเล่นอยู่ (หรือ Pause อยู่แต่เป็นไฟล์ล่าสุด) -> สั่ง Play/Pause
+        if (playingFile) {
+          const item = incorrectData.find((i) => i.filename === playingFile);
+          if (item) {
+            // เตรียม URL (Logic เดียวกับใน Loop แสดงผล)
+            let src = item.audioPath;
+            if (!src) src = fileMap.get(item.filename);
+            if (src && !src.startsWith("blob:") && !src.startsWith("http")) {
+              src = audioService.getAudioUrl(src);
+            }
+            playAudio({ ...item, audioPath: src });
+          }
+        }
+        // กรณี 2: ถ้าไม่มีไฟล์เล่นอยู่เลย -> ให้เล่นไฟล์แรกของหน้านั้น
+        else if (items.length > 0) {
+          const item = items[0];
+          let src = item.audioPath;
+          if (!src) src = fileMap.get(item.filename);
+          if (src && !src.startsWith("blob:") && !src.startsWith("http")) {
+            src = audioService.getAudioUrl(src);
+          }
+          playAudio({ ...item, audioPath: src });
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [playingFile, items, incorrectData, fileMap, playAudio]);
 
   return (
     <div className="edit-container animate-fade-in">
@@ -657,13 +700,13 @@ const EditPage: React.FC = () => {
           </div>
         </div>
 
-       <GuidelinePanel 
-        isOpen={isGuideOpen} 
-        onToggle={setIsGuideOpen}
-        type="edit"
-      />
+        <GuidelinePanel
+          isOpen={isGuideOpen}
+          onToggle={setIsGuideOpen}
+          type="edit"
+        />
       </div>
-    <Modal
+      <Modal
         isOpen={!!fileToDelete}
         type="confirm"
         title="Confirm Deletion"

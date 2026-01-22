@@ -190,6 +190,10 @@ const AnnotationPage: React.FC = () => {
         e.preventDefault();
         playAudio(firstItem);
       }
+      if (e.code === "ShiftRight") {
+        e.preventDefault();
+        playAudio(firstItem);
+      }
       if (e.code === "Enter") {
         e.preventDefault();
         handleDecision(firstItem, "correct", smartEdits[firstItem.filename]);
@@ -213,7 +217,7 @@ const AnnotationPage: React.FC = () => {
   const shouldExpand = (idx: number) => {
     // 1. ถ้ากด Cut All ไว้ (isBatchMode) -> ขยายทั้งหมด
     if (isBatchMode) return true;
-    // 2. ถ้าไม่ได้กด Cut All แต่เปิด Auto Cut -> ขยายเฉพาะตัวแรก
+    // 2. ถ้ไม่ได้กด Cut All แต่เปิด Auto Cut -> ขยายเฉพาะตัวแรก
     if (autoTokenize && idx === 0) return true;
     return false;
   };
@@ -229,7 +233,7 @@ const AnnotationPage: React.FC = () => {
       </div>
     );
   }
-
+  
   return (
     <div className="anno-container animate-fade-in">
       {/* --- Toolbar --- */}

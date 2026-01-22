@@ -1,4 +1,6 @@
+// src/components/AudioPlayer/WaveformPlayer.tsx
 import React, { useRef, useEffect, useState } from 'react';
+import WaveSurfer from 'wavesurfer.js';
 import './WaveformPlayer.css';
 
 interface Props {
@@ -6,7 +8,7 @@ interface Props {
   isPlaying: boolean;
   onPlayChange?: (isPlaying: boolean) => void;
   progressColor?: string;
-  height?: string;
+  height?: string; // รับค่า class เช่น h-1, h-1.5
 }
 
 export const WaveformPlayer: React.FC<Props> = ({
@@ -16,10 +18,19 @@ export const WaveformPlayer: React.FC<Props> = ({
   progressColor = '#818cf8',
   height = 'h-1.5'
 }) => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const wavesurfer = useRef<WaveSurfer | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
+  // 🔴 ใช้ useRef เก็บ onPlayChange เพื่อไม่ให้ useEffect ทำงานซ้ำเมื่อ Parent Re-render
+  // นี่คือหัวใจสำคัญที่แก้บัค "พิมพ์แล้วเสียงเริ่มใหม่"
+  const onPlayChangeRef = useRef(onPlayChange);
+  useEffect(() => {
+    onPlayChangeRef.current = onPlayChange;
+  }, [onPlayChange]);
+
+  // Helper ดึง URL จริง (เผื่อกรณี Blob)
   const getCleanUrl = (url: string) => {
     if (!url) return '';
     const match = url.match(/(blob:.*)/);
@@ -27,48 +38,66 @@ export const WaveformPlayer: React.FC<Props> = ({
   };
   const cleanUrl = getCleanUrl(audioUrl);
 
+  // Initialize WaveSurfer
   useEffect(() => {
-    if (!cleanUrl) return;
-    const audio = new Audio(cleanUrl);
-    audioRef.current = audio;
+    if (!containerRef.current || !cleanUrl) return;
 
-    const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration);
-    const handleEnded = () => {
-      onPlayChange?.(false);
-      setCurrentTime(0);
-    };
+    // สร้าง WaveSurfer
+    const ws = WaveSurfer.create({
+      container: containerRef.current,
+      waveColor: '#cbd5e1', // สีพื้นหลังเวฟ (slate-300)
+      progressColor: progressColor,
+      cursorColor: 'transparent', // ซ่อนเส้น Cursor ให้ดูคล้าย Slider เดิม
+      barWidth: 2,
+      barRadius: 3,
+      cursorWidth: 1,
+      height: 24, // ความสูงของ Waveform (pixel)
+      barGap: 2,
+      url: cleanUrl,
+      normalize: true, // ปรับเสียงให้กราฟดูเต็มสวย
+      interact: true,  // ให้ลาก Seek ได้
+    });
+
+    wavesurfer.current = ws;
+
+    // Events
+    ws.on('ready', (d) => {
+      setDuration(d);
+    });
+
+    ws.on('audioprocess', (t) => {
+      setCurrentTime(t);
+    });
+
+    ws.on('finish', () => {
+      onPlayChangeRef.current?.(false);
+    });
     
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('loadedmetadata', updateDuration);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', () => onPlayChange?.(false));
+    ws.on('interaction', () => {
+        // เมื่อ user ลากกราฟ ไม่ต้องทำอะไรพิเศษ wavesurfer จัดการเอง
+    });
 
+    // Cleanup
     return () => {
-      audio.pause();
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('loadedmetadata', updateDuration);
-      audio.removeEventListener('ended', handleEnded);
+      ws.destroy();
     };
-  }, [cleanUrl, onPlayChange]);
+  }, [cleanUrl]); // ⚠️ Dependency มีแค่ URL (และสี) ไม่รวม onPlayChange แล้ว
 
+  // Sync Play/Pause จาก Props (Parent Control)
   useEffect(() => {
-    if (!audioRef.current || !cleanUrl) return;
-    if (isPlaying) {
-      audioRef.current.play().catch(() => onPlayChange?.(false));
-    } else {
-      audioRef.current.pause();
+    if (!wavesurfer.current) return;
+    try {
+        if (isPlaying) {
+          wavesurfer.current.play();
+        } else {
+          wavesurfer.current.pause();
+        }
+    } catch (e) {
+        console.error("WaveSurfer error", e);
     }
-  }, [isPlaying, cleanUrl, onPlayChange]);
+  }, [isPlaying]);
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = Number(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
-  };
-
+  // Format Time (MM:SS)
   const formatTime = (t: number) => {
     if (!t || isNaN(t)) return "0:00";
     const m = Math.floor(t / 60);
@@ -78,30 +107,19 @@ export const WaveformPlayer: React.FC<Props> = ({
 
   return (
     <div className="w-full flex flex-col">
-      {/* 🕒 Time Display: Top Right */}
+      {/* 🕒 Time Display: มุมขวาบนเหมือนเดิม */}
       <div className="flex justify-end mb-1">
         <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 tabular-nums leading-none">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
       </div>
 
-      {/* 🎚️ Slider Tube */}
-      <div className={`waveform-container ${height === 'h-1.5' ? 'h-auto' : ''}`} style={{ padding: 0 }}>
-        <div className="slider-container" style={{ color: progressColor }}>
-          <input
-            type="range"
-            min="0"
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-            className="waveform-slider"
-            style={{
-              backgroundImage: `linear-gradient(${progressColor}, ${progressColor})`,
-              backgroundSize: `${(currentTime / (duration || 1)) * 100}% 100%`,
-              backgroundRepeat: 'no-repeat'
-            }}
-          />
-        </div>
+      {/* 🎚️ Waveform Container */}
+      {/* ใช้ height จาก props เพื่อคุมขนาด container ให้เท่าเดิม */}
+      <div 
+        className={`waveform-wrapper w-full ${height} flex items-center bg-slate-50/50 rounded-lg overflow-hidden`}
+      >
+        <div ref={containerRef} className="w-full" />
       </div>
     </div>
   );
