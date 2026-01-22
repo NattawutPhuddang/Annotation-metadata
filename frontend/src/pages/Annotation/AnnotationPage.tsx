@@ -12,6 +12,7 @@ import {
   Layers,
   FastForward,
   Loader2,
+  
 } from "lucide-react";
 import { useAnnotation } from "../../context/AnnotationContext";
 import { WaveformPlayer } from "../../components/AudioPlayer/WaveformPlayer";
@@ -30,7 +31,8 @@ const AnnotationPage: React.FC = () => {
     playingFile,
     inspectText,
     tokenCache,
-    suggestions,  // ADD THIS
+    suggestions, 
+    setAudioFiles, // ADD THIS
   } = useAnnotation();
 
   const [page, setPage] = useState(1);
@@ -347,12 +349,17 @@ const AnnotationPage: React.FC = () => {
                           e.stopPropagation(); 
                           if (window.confirm(`Delete "${item.filename}" to trash?`)) {
                             try {
-                              // ✅ แก้ไข: ใช้ appendTsv เพื่อบันทึกลง trash.tsv โดยตรง (เพราะไฟล์ยังไม่มีในระบบ)
-                              await audioService.appendTsv('trash.tsv', item);
+                              // Step 1: ยิง API บันทึกลง trash.tsv โดยตรง
+                              await audioService.appendTsv('trash.tsv', item); 
                               
-                              // ทางเลือก: ซ่อนจากหน้าจอโดยถือว่าเป็น Incorrect ไปก่อน หรือจะแค่ Reload
-                              // (เพื่อให้สมบูรณ์ คุณอาจต้องเพิ่ม logic ใน Context ให้กรอง trash.tsv ออกด้วย)
-                              handleDecision(item, "incorrect"); 
+                              // Step 2: ลบออกจาก State audioFiles ทันที (เพื่อให้หายไปจากหน้าจอ)
+                              setAudioFiles(prev => prev.filter(f => f.filename !== item.filename));
+
+                              // Step 3: เคลียร์ข้อมูล Smart Edit ที่ค้างอยู่ (ถ้ามี)
+                              setSmartEdits(prev => { const n={...prev}; delete n[item.filename]; return n; });
+
+                              // ❌ อย่าเรียก handleDecision(item, "incorrect") ตรงนี้เด็ดขาด! 
+                              // เพราะมันจะพาไป fail.tsv ด้วย
                             } catch (error) {
                               alert("Error deleting item");
                             }
@@ -360,7 +367,7 @@ const AnnotationPage: React.FC = () => {
                         }}
                       >
                         <Trash2 size={12} />
-                      </button>
+                          </button>
 
                         <div className="decision-group">
                           <button

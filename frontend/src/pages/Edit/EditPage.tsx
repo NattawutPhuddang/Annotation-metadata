@@ -63,6 +63,7 @@ const EditPage: React.FC = () => {
     tokenCache,
     inspectText,
     suggestions,
+    setIncorrectData,
   } = useAnnotation();
 
   const [page, setPage] = useState(1);
@@ -106,6 +107,8 @@ const EditPage: React.FC = () => {
 
   const lastAutoPlayedRef = useRef<string | null>(null);
 
+  
+
   // ✅ 3. บันทึกข้อมูลลง LocalStorage ทุกครั้งที่มีการแก้ไข
   useEffect(() => {
     localStorage.setItem("edit_drafts", JSON.stringify(edits));
@@ -128,6 +131,7 @@ const EditPage: React.FC = () => {
     setIsBatchMode(false);
   }, [page]);
 
+ 
   // Map Local Files
   const fileMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -313,28 +317,35 @@ const EditPage: React.FC = () => {
   };
 
   const handleDelete = async (filename: string) => {
-  if (!window.confirm(`Delete ${filename}?`)) return;
-  try {
-    // ✅ แก้ไข: ระบุ sourceFile เป็น 'fail.tsv' เพื่อให้ย้ายจากไฟล์ผิดไปลงถังขยะ
-    await audioService.moveToTrash(filename, 'fail.tsv');
+    if (!window.confirm(`Delete ${filename}?`)) return;
+    try {
+      // สั่ง Backend ย้ายไฟล์
+      await audioService.moveToTrash(filename, 'fail.tsv');
 
-    // ลบข้อมูล local state ตามเดิม
-    setEdits((prev) => {
-      const c = { ...prev };
-      delete c[filename];
-      return c;
-    });
-    setSmartEditsMap((prev) => {
-      const c = { ...prev };
-      delete c[filename];
-      return c;
-    });
+      // ลบข้อมูล local state (Draft)
+      setEdits((prev) => {
+        const c = { ...prev };
+        delete c[filename];
+        return c;
+      });
+      setSmartEditsMap((prev) => {
+        const c = { ...prev };
+        delete c[filename];
+        return c;
+      });
 
-    window.location.reload(); // หรือโหลดข้อมูลใหม่
-  } catch (e) {
-    alert("Delete failed");
-  }
-};
+      // ✅ 2. สั่งลบออกจากหน้าจอทันที (ไม่ต้อง Reload)
+      setIncorrectData((prev) => prev.filter((item) => item.filename !== filename));
+      
+      // ❌ ลบบรรทัดนี้ทิ้งไปเลย
+      // window.location.reload(); 
+
+    } catch (e) {
+      alert("Delete failed");
+    }
+  };
+
+  
 
   return (
     <div className="edit-container animate-fade-in">

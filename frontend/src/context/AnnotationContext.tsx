@@ -16,6 +16,7 @@ interface AnnotationContextType {
   setAudioFiles: React.Dispatch<React.SetStateAction<AudioItem[]>>;
   correctData: AudioItem[];
   incorrectData: AudioItem[];
+  setIncorrectData: React.Dispatch<React.SetStateAction<AudioItem[]>>;
   changes: Array<{ original: string; changed: string }>;
   pendingItems: AudioItem[];
   
@@ -278,7 +279,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       employeeId, setEmployeeId,
       isDarkMode, toggleTheme, logout,
       audioFiles, setAudioFiles,
-      correctData, incorrectData, changes, pendingItems,
+      correctData, incorrectData, setIncorrectData, changes, pendingItems,
       isLoading, loadingMsg, setLoading,
       audioPath, setAudioPath, hasStarted, setHasStarted,
       tokenCache, suggestions,  // ADD suggestions HERE
