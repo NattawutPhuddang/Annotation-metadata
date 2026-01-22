@@ -222,12 +222,24 @@ const CorrectPage: React.FC = () => {
                     <td>
                       <div className="action-wrapper">
                          {/* Trash Button (Hover) */}
-                         <button 
+                         {/* <button 
                             className="btn-trash-float"
-                            onClick={(e) => { e.stopPropagation(); alert("Delete Logic"); }}
+                            onClick={async (e) => { 
+                              e.stopPropagation(); 
+                              if (window.confirm(`Delete "${item.filename}" to trash?`)) {
+                                try {
+                                  await audioService.moveToTrash(item.filename, 'Correct.tsv');
+                                  // อัปเดต state ของ context
+                                  await handleDecision(item, 'incorrect');
+                                } catch (error) {
+                                  alert("Error deleting item: " + (error instanceof Error ? error.message : 'Unknown error'));
+                                }
+                              }
+                            }}
+                            title="Delete to trash"
                           >
                             <Trash2 size={12} />
-                          </button>
+                          </button> */}
 
                         <button
                           onClick={() => handleDecision(item, "incorrect")}

@@ -163,12 +163,14 @@ const EditPage: React.FC = () => {
   };
 
   const handleDelete = async (filename: string) => {
-    if (!window.confirm(`Delete ${filename}?`)) return;
+    if (!window.confirm(`Delete "${filename}" to trash?`)) return;
     try {
-      await audioService.deleteTsvEntry("fail.tsv", filename);
+      await audioService.moveToTrash(filename, 'fail.tsv');
+      // อัปเดต state เพื่อให้รายการลบออก
+      await handleCorrection({ filename, text: '' } as AudioItem, '');
       window.location.reload();
     } catch (e) {
-      alert("Delete failed");
+      alert("Error deleting item: " + (e instanceof Error ? e.message : 'Unknown error'));
     }
   };
 
@@ -367,10 +369,17 @@ const EditPage: React.FC = () => {
                           {/* ✅ ย้าย Trash Button มาไว้ใน td เพื่อไม่ให้ Layout พัง */}
                           <button
                             className="btn-trash-float"
-                            title="Delete Item"
-                            onClick={(e) => {
+                            title="Delete to trash"
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              handleDelete(item.filename);
+                              if (window.confirm(`Delete "${item.filename}" to trash?`)) {
+                                try {
+                                  await audioService.moveToTrash(item.filename, 'fail.tsv');
+                                  window.location.reload();
+                                } catch (error) {
+                                  alert("Error deleting item: " + (error instanceof Error ? error.message : 'Unknown error'));
+                                }
+                              }
                             }}
                           >
                             <Trash2 size={14} />

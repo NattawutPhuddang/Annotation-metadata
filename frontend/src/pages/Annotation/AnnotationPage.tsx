@@ -4,6 +4,7 @@ import { useAnnotation } from "../../context/AnnotationContext";
 import { WaveformPlayer } from "../../components/AudioPlayer/WaveformPlayer";
 import { TokenizedText } from "../../components/Tokenizer/TokenizedText";
 import { Pagination } from "../../components/Shared/Pagination";
+import { audioService } from "../../api/audioService";
 import "./AnnotationPage.css";
 
 const ITEMS_PER_PAGE = 10;
@@ -16,7 +17,7 @@ const AnnotationPage: React.FC = () => {
     playingFile, 
     inspectText, 
     tokenCache,
-    suggestions  // ADD THIS
+    suggestions,  // ADD THIS
   } = useAnnotation();
   const [page, setPage] = useState(1);
   const [smartEdits, setSmartEdits] = useState<Record<string, Record<number, string>>>({});
@@ -134,8 +135,19 @@ const AnnotationPage: React.FC = () => {
                         {/* 🗑️ Trash Button (Float on Hover) */}
                         <button 
                           className="btn-trash-float"
-                          title="Delete (Coming Soon)"
-                          onClick={(e) => { e.stopPropagation(); alert("Delete Logic"); }}
+                          title="Delete to trash"
+                          onClick={async (e) => { 
+                            e.stopPropagation(); 
+                            if (window.confirm(`Delete "${item.filename}" to trash?`)) {
+                              try {
+                                await audioService.moveToTrash(item.filename, 'Correct.tsv');
+                                // อัปเดต state เพื่อให้รายการลบออกจากรายการที่พิจารณา
+                                await handleDecision(item, 'incorrect');
+                              } catch (error) {
+                                alert("Error deleting item: " + (error instanceof Error ? error.message : 'Unknown error'));
+                              }
+                            }
+                          }}
                         >
                           <Trash2 size={12} />
                         </button>
