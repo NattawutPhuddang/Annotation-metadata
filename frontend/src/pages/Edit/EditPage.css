@@ -273,12 +273,11 @@
   transform: translateY(-1px);
 }
 .edit-container .btn-batch-toggle.active {
-  background-color: var(--text-main);
-  color: white;
-  border-color: var(--text-main);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  background-color: hsl(221, 14%, 21%);
+    color: #fff;
+    border-color: hsl(221, 14%, 29%);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
-
 /* --- Table & Edit Area --- */
 .edit-container .custom-table {
   width: 100%;
