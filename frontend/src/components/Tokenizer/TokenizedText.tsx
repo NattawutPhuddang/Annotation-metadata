@@ -25,14 +25,23 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(isExpanded);
 
+  // ✅ FIX 1: อัปเดต state เมื่อ props เปลี่ยน (สำคัญสำหรับ Auto Cut / Cut All)
   useEffect(() => {
-    if (preLoadedTokens) setTokens(preLoadedTokens);
-    else {
-      setTokens(null);
-      if (isExpanded) loadTokens();
+    setExpanded(isExpanded);
+  }, [isExpanded]);
+
+  // ✅ FIX 2: Logic การโหลด Token เมื่อมีการขยาย หรือมี Token ส่งมาใหม่
+  useEffect(() => {
+    if (preLoadedTokens) {
+      setTokens(preLoadedTokens);
+    } else {
+      // ถ้าไม่มี Token แต่สั่งให้ขยาย (เช่น Auto Cut) ให้โหลดเดี๋ยวนี้
+      if (expanded && !tokens && !loading) {
+        loadTokens();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, isExpanded, preLoadedTokens]);
+  }, [expanded, preLoadedTokens, text]); 
 
   const loadTokens = async () => {
     if (preLoadedTokens) {
@@ -51,12 +60,10 @@ export const TokenizedText: React.FC<TokenizedTextProps> = ({
   };
 
   const handleClick = async () => {
-    if (expanded) {
-      setExpanded(false);
-      return;
-    }
-    setExpanded(true);
-    if (!tokens) await loadTokens();
+    // Toggle manual
+    const nextState = !expanded;
+    setExpanded(nextState);
+    if (nextState && !tokens) await loadTokens();
   };
 
   const handleTokenClick = (idx: number, suggested: string | undefined) => {
