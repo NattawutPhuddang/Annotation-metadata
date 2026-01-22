@@ -464,10 +464,10 @@
 }
 
 .btn-batch-toggle.active {
-  background-color: var(--text-main); /* สีเข้มเมื่อเปิด */
-  color: white;
-  border-color: var(--text-main);
-  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    background-color: hsl(221, 14%, 21%);
+    color: #fff;
+    border-color: hsl(221, 14%, 29%);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 .btn-batch-toggle:disabled {
