@@ -25,6 +25,7 @@ import { WaveformPlayer } from "../../components/AudioPlayer/WaveformPlayer";
 import { TokenizedText } from "../../components/Tokenizer/TokenizedText";
 import { audioService } from "../../api/audioService";
 import { Modal } from "../../components/Shared/Modal";
+import { GuidelinePanel } from "../../components/GuidelinePanel";
 import "./EditPage.css";
 
 const ITEMS_PER_PAGE = 10;
@@ -199,7 +200,7 @@ const EditPage: React.FC = () => {
       setIncorrectData((prev) => prev.filter((item) => item.filename !== fileToDelete));
 
     } catch (e) {
-      alert("Delete failed");
+      // alert("Delete failed");
     } finally {
       setFileToDelete(null); // ปิด Modal
     }
@@ -339,33 +340,8 @@ const EditPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (filename: string) => {
-    if (!window.confirm(`Delete ${filename}?`)) return;
-    try {
-      // สั่ง Backend ย้ายไฟล์
-      await audioService.moveToTrash(filename, 'fail.tsv');
-
-      // ลบข้อมูล local state (Draft)
-      setEdits((prev) => {
-        const c = { ...prev };
-        delete c[filename];
-        return c;
-      });
-      setSmartEditsMap((prev) => {
-        const c = { ...prev };
-        delete c[filename];
-        return c;
-      });
-
-      // ✅ 2. สั่งลบออกจากหน้าจอทันที (ไม่ต้อง Reload)
-      setIncorrectData((prev) => prev.filter((item) => item.filename !== filename));
-      
-      // ❌ ลบบรรทัดนี้ทิ้งไปเลย
-      // window.location.reload(); 
-
-    } catch (e) {
-      alert("Delete failed");
-    }
+   const handleDelete = async (filename: string) => {
+    setFileToDelete(filename);
   };
 
   
@@ -628,7 +604,6 @@ const EditPage: React.FC = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               setFileToDelete(item.filename);
-                              handleDelete(item.filename);
                             }}
                           >
                             <Trash2 size={14} />
@@ -682,90 +657,11 @@ const EditPage: React.FC = () => {
           </div>
         </div>
 
-        {/* --- Guideline Panel --- */}
-        <aside
-          className={`guideline-panel ${!isGuideOpen ? "collapsed" : ""}`}
-          onClick={() => !isGuideOpen && setIsGuideOpen(true)}
-        >
-          <div className="guide-header">
-            <h3>
-              <BookOpen size={18} className="text-primary" /> Guidelines
-            </h3>
-            <div
-              className="btn-collapse"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsGuideOpen(!isGuideOpen);
-              }}
-            >
-              <ChevronsRight
-                size={18}
-                className={`transition-transform ${!isGuideOpen ? "rotate-180" : ""}`}
-              />
-            </div>
-          </div>
-          <div className="vertical-label">
-            <Info size={16} /> GUIDELINES
-          </div>
-          <div className="guide-content">
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                คำซ้ำใช้ <span className="highlight">ๆ</span>{" "}
-                <div className="text-slate-400 text-xs">"อื่นๆ", "ไปๆ มาๆ"</div>
-              </div>
-            </div>
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                คำย่อใช้ <span className="highlight">ฯ</span>{" "}
-                <div className="text-slate-400 text-xs">"จังหวัดกาญฯ"</div>
-              </div>
-            </div>
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                หนึ่งสอง ใช้ <span className="highlight">ตัวเลขอารบิก</span>{" "}
-                <div className="text-slate-400 text-xs">"10คน", "10:30"</div>ยกเว้นชื่อเฉพาะ "คลองหนึ่ง"
-              </div>
-            </div>
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                เสียงซ้อน{" "}
-                <span className="highlight bg-red-50 text-red-600 border-red-200">
-                  ทิ้งถังขยะ
-                </span>
-              </div>
-            </div>
-            <div className="guide-item">
-              <div
-                className="guide-icon"
-                style={{ background: "#f97316" }}
-              ></div>
-              <div>
-                Format <span className="highlight">(ผิด,ถูก)</span>{" "}
-                <div className="text-slate-400 text-xs">
-                  กด <b>F2</b> เพื่อสร้าง Pattern
-                </div>
-              </div>
-            </div>
-            <div className="shortcut-grid">
-              <div className="shortcut-item">
-                <span className="flex items-center gap-2 text-orange-600">
-                  Format
-                </span>
-                <span className="key-badge">F2</span>
-              </div>
-              <div className="shortcut-item">
-                <span className="flex items-center gap-2 text-primary">
-                  Save
-                </span>
-                <span className="key-badge">Enter</span>
-              </div>
-            </div>
-          </div>
-        </aside>
+       <GuidelinePanel 
+        isOpen={isGuideOpen} 
+        onToggle={setIsGuideOpen}
+        type="edit"
+      />
       </div>
     <Modal
         isOpen={!!fileToDelete}

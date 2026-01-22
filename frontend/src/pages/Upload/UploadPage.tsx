@@ -3,6 +3,7 @@ import { UploadCloud, Folder, FileText, Play } from 'lucide-react';
 import { useAnnotation } from '../../context/AnnotationContext';
 import { audioService } from '../../api/audioService';
 import { AudioItem } from '../../types';
+import { Modal } from '../../components/Shared/Modal';
 import './UploadPage.css';
 
 const UploadPage: React.FC = () => {
@@ -14,6 +15,27 @@ const UploadPage: React.FC = () => {
   const [metadata, setMetadata] = useState<AudioItem[]>([]);
   const [selectedLocalFiles, setSelectedLocalFiles] = useState<File[]>([]);
   const [localPathInput, setLocalPathInput] = useState(audioPath || "");
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    type: 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    type: 'error',
+    title: '',
+    message: '',
+  });
+
+  // Helper: Show Modal
+  const showModal = (type: 'error' | 'warning' | 'info', title: string, message: string) => {
+    setModalState({ isOpen: true, type, title, message });
+  };
+
+  // Helper: Close Modal
+  const closeModal = () => {
+    setModalState({ ...modalState, isOpen: false });
+  };
 
   // 1. Handle Metadata (TSV) Upload
   const handleMetadataUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,7 +69,7 @@ const UploadPage: React.FC = () => {
   // 3. Main Logic: Scan & Match
   const handleScan = async () => {
     if (metadata.length === 0) {
-      alert("Please upload a Metadata (.tsv) file first.");
+      showModal('warning', 'Missing Metadata', 'Please upload a Metadata (.tsv) file first.');
       return;
     }
     
@@ -76,7 +98,7 @@ const UploadPage: React.FC = () => {
       // B. Server Path Mode
       else {
         if (!localPathInput.trim()) {
-            alert("Please specify a folder path.");
+            showModal('warning', 'Missing Path', 'Please specify a folder path.');
             setLoading(false);
             return;
         }
@@ -106,12 +128,12 @@ const UploadPage: React.FC = () => {
         setAudioFiles(matchedItems);
         setHasStarted(true); // Switch to Main Layout
       } else {
-        alert("No matching audio files found. Please check filenames.");
+        showModal('warning', 'No Matches Found', 'No matching audio files found. Please check filenames.');
       }
 
     } catch (e) {
       console.error(e);
-      alert("Error scanning files.");
+      showModal('error', 'Scan Error', 'Error scanning files. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -188,6 +210,22 @@ const UploadPage: React.FC = () => {
             Change User
         </div>
       </div>
+
+      {/* Modal for Notifications */}
+      <Modal
+        isOpen={modalState.isOpen}
+        type={modalState.type}
+        title={modalState.title}
+        message={modalState.message}
+        closeButton={true}
+        actions={[
+          {
+            label: "OK",
+            onClick: closeModal,
+            variant: "primary",
+          },
+        ]}
+      />
     </div>
   );
 };

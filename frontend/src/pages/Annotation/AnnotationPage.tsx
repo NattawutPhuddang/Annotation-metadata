@@ -20,6 +20,7 @@ import { TokenizedText } from "../../components/Tokenizer/TokenizedText";
 import { Pagination } from "../../components/Shared/Pagination";
 import { audioService } from "../../api/audioService";
 import { Modal } from "../../components/Shared/Modal";
+import { GuidelinePanel } from "../../components/GuidelinePanel";
 import "./AnnotationPage.css";
 
 const ITEMS_PER_PAGE = 10;
@@ -151,7 +152,7 @@ const AnnotationPage: React.FC = () => {
       setSmartEdits(prev => { const n={...prev}; delete n[itemToDelete.filename]; return n; });
       
     } catch (error) {
-      alert("Error deleting item");
+      // alert("Error deleting item");
     } finally {
       setItemToDelete(null); // ปิด Modal
     }
@@ -364,33 +365,16 @@ const AnnotationPage: React.FC = () => {
 
                     <td>
                       <div className="action-wrapper">
-                        <button
+                                                <button
                         className="btn-trash-float"
                         title="Delete to trash"
-                        onClick={async (e) => { 
+                        onClick={(e) => { 
                           e.stopPropagation(); 
                           setItemToDelete(item);
-                          if (window.confirm(`Delete "${item.filename}" to trash?`)) {
-                            try {
-                              // Step 1: ยิง API บันทึกลง trash.tsv โดยตรง
-                              await audioService.appendTsv('trash.tsv', item); 
-                              
-                              // Step 2: ลบออกจาก State audioFiles ทันที (เพื่อให้หายไปจากหน้าจอ)
-                              setAudioFiles(prev => prev.filter(f => f.filename !== item.filename));
-
-                              // Step 3: เคลียร์ข้อมูล Smart Edit ที่ค้างอยู่ (ถ้ามี)
-                              setSmartEdits(prev => { const n={...prev}; delete n[item.filename]; return n; });
-
-                              // ❌ อย่าเรียก handleDecision(item, "incorrect") ตรงนี้เด็ดขาด! 
-                              // เพราะมันจะพาไป fail.tsv ด้วย
-                            } catch (error) {
-                              alert("Error deleting item");
-                            }
-                          }
                         }}
                       >
                         <Trash2 size={12} />
-                          </button>
+                        </button>
 
                         <div className="decision-group">
                           <button
@@ -437,80 +421,11 @@ const AnnotationPage: React.FC = () => {
           className={`guideline-panel ${!isGuideOpen ? "collapsed" : ""}`}
           onClick={() => !isGuideOpen && setIsGuideOpen(true)}
         >
-          <div className="guide-header">
-            <h3>
-              <BookOpen size={18} className="text-primary" /> คำแนะนำ
-            </h3>
-            <div
-              className="btn-collapse"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsGuideOpen(!isGuideOpen);
-              }}
-            >
-              <ChevronsRight
-                size={18}
-                className={`transition-transform ${!isGuideOpen ? "rotate-180" : ""}`}
-              />
-            </div>
-          </div>
-          <div className="vertical-label">
-            <Info size={16} /> คำแนะนำการตรวจสอบ
-          </div>
-          <div className="guide-content">
-            {/* Content เดิม */}
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                คำซ้ำใช้ <span className="highlight">ๆ</span>{" "}
-                <div className="text-slate-400 text-xs">"อื่นๆ", "ไปๆ มาๆ"</div>
-              </div>
-            </div>
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                คำย่อใช้ <span className="highlight">ฯ</span>{" "}
-                <div className="text-slate-400 text-xs">"จังหวัดกาญฯ"</div>
-              </div>
-            </div>
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                หนึ่งสอง ใช้ <span className="highlight">ตัวเลขอารบิก</span>{" "}
-                <div className="text-slate-400 text-xs">"10คน", "10:30"</div>ยกเว้นชื่อเฉพาะ "คลองหนึ่ง"
-              </div>
-            </div>
-            
-            <div className="guide-item">
-              <div className="guide-icon"></div>
-              <div>
-                เสียงซ้อน{" "}
-                <span className="highlight bg-red-50 text-red-600 border-red-200">
-                  ทิ้งถังขยะ
-                </span>
-              </div>
-            </div>
-            <div className="shortcut-grid">
-              <div className="shortcut-item">
-                <span className="flex items-center gap-2 text-slate-500">
-                  <Play size={12} /> Play
-                </span>
-                <span className="key-badge">Space</span>
-              </div>
-              <div className="shortcut-item">
-                <span className="flex items-center gap-2 text-green-600">
-                  <Check size={12} /> Correct
-                </span>
-                <span className="key-badge">Enter</span>
-              </div>
-              <div className="shortcut-item">
-                <span className="flex items-center gap-2 text-red-600">
-                  <X size={12} /> Fail
-                </span>
-                <span className="key-badge">Back</span>
-              </div>
-            </div>
-          </div>
+          <GuidelinePanel 
+            isOpen={isGuideOpen} 
+            onToggle={setIsGuideOpen}
+            type="annotation"
+          />
         </aside>
       </div>
       <Modal
