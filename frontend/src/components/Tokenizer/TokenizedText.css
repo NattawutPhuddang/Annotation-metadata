@@ -6,6 +6,7 @@
 
 .token-summary {
   cursor: pointer;
+  width: 110%;
   transition: all 0.2s ease;
   border-radius: 1rem;
   padding: 1rem;
@@ -74,6 +75,7 @@
 /* Expanded Area */
 .tokens-grid {
   margin-top: 0.75rem;
+  width: 110%;
   padding: 1rem;
   background-color: rgba(240, 249, 255, 0.6);
   border: 1px solid var(--primary-soft);
