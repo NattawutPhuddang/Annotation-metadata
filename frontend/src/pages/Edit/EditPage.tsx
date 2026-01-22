@@ -398,7 +398,7 @@ const EditPage: React.FC = () => {
 
         <div className="anno-toolbar">
           <div className="toolbar-left">
-            <h2 className="toolbar-title">Workstation</h2>
+            <h2 className="toolbar-title">Tool</h2>
             <label className="toggle-switch-wrapper">
               <input
                 type="checkbox"
@@ -689,8 +689,8 @@ const EditPage: React.FC = () => {
             <div className="guide-item">
               <div className="guide-icon"></div>
               <div>
-                ตัวเลข <span className="highlight">อารบิก</span>{" "}
-                <div className="text-slate-400 text-xs">"10คน", "10:30"</div>
+                หนึ่งสอง ใช้ <span className="highlight">ตัวเลขอารบิก</span>{" "}
+                <div className="text-slate-400 text-xs">"10คน", "10:30"</div>ยกเว้นชื่อเฉพาะ "คลองหนึ่ง"
               </div>
             </div>
             <div className="guide-item">
