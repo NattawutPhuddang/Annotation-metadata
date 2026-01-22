@@ -313,27 +313,28 @@ const EditPage: React.FC = () => {
   };
 
   const handleDelete = async (filename: string) => {
-    if (!window.confirm(`Delete ${filename}?`)) return;
-    try {
-      await audioService.deleteTsvEntry("fail.tsv", filename);
+  if (!window.confirm(`Delete ${filename}?`)) return;
+  try {
+    // ✅ แก้ไข: ระบุ sourceFile เป็น 'fail.tsv' เพื่อให้ย้ายจากไฟล์ผิดไปลงถังขยะ
+    await audioService.moveToTrash(filename, 'fail.tsv');
 
-      // ลบข้อมูลที่ค้างใน LocalStorage ด้วยถ้ามี
-      setEdits((prev) => {
-        const c = { ...prev };
-        delete c[filename];
-        return c;
-      });
-      setSmartEditsMap((prev) => {
-        const c = { ...prev };
-        delete c[filename];
-        return c;
-      });
+    // ลบข้อมูล local state ตามเดิม
+    setEdits((prev) => {
+      const c = { ...prev };
+      delete c[filename];
+      return c;
+    });
+    setSmartEditsMap((prev) => {
+      const c = { ...prev };
+      delete c[filename];
+      return c;
+    });
 
-      window.location.reload();
-    } catch (e) {
-      alert("Delete failed");
-    }
-  };
+    window.location.reload(); // หรือโหลดข้อมูลใหม่
+  } catch (e) {
+    alert("Delete failed");
+  }
+};
 
   return (
     <div className="edit-container animate-fade-in">

@@ -341,23 +341,26 @@ const AnnotationPage: React.FC = () => {
                     <td>
                       <div className="action-wrapper">
                         <button
-                          className="btn-trash-float"
-                          title="Delete to trash"
-                          onClick={async (e) => { 
-                            e.stopPropagation(); 
-                            if (window.confirm(`Delete "${item.filename}" to trash?`)) {
-                              try {
-                                await audioService.moveToTrash(item.filename, 'Correct.tsv');
-                                // Logic จะอัปเดตอัตโนมัติเมื่อ pendingItems เปลี่ยน
-                                setSmartEdits(prev => { const n={...prev}; delete n[item.filename]; return n; });
-                              } catch (error) {
-                                alert("Error deleting item: " + (error instanceof Error ? error.message : 'Unknown error'));
-                              }
+                        className="btn-trash-float"
+                        title="Delete to trash"
+                        onClick={async (e) => { 
+                          e.stopPropagation(); 
+                          if (window.confirm(`Delete "${item.filename}" to trash?`)) {
+                            try {
+                              // ✅ แก้ไข: ใช้ appendTsv เพื่อบันทึกลง trash.tsv โดยตรง (เพราะไฟล์ยังไม่มีในระบบ)
+                              await audioService.appendTsv('trash.tsv', item);
+                              
+                              // ทางเลือก: ซ่อนจากหน้าจอโดยถือว่าเป็น Incorrect ไปก่อน หรือจะแค่ Reload
+                              // (เพื่อให้สมบูรณ์ คุณอาจต้องเพิ่ม logic ใน Context ให้กรอง trash.tsv ออกด้วย)
+                              handleDecision(item, "incorrect"); 
+                            } catch (error) {
+                              alert("Error deleting item");
                             }
-                          }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                          }
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
 
                         <div className="decision-group">
                           <button

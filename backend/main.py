@@ -112,6 +112,10 @@ class DeleteTsvEntryRequest(BaseModel):
     filename: str
     key: str
 
+class MoveToTrashRequest(BaseModel):
+    filename: str
+    sourceFile: str = "Correct.tsv"  # default value
+
 # --- 4. Helper Functions ---
 def get_file_path(filename):
     # ป้องกัน Directory Traversal
@@ -289,6 +293,49 @@ def delete_tsv_entry(req: DeleteTsvEntryRequest):
         f.write("\n".join(new_lines) + "\n")
 
     return {"status": "deleted"}
+
+# 🟢 API: ย้ายไฟล์ลงถังขยะ (Move to Trash)
+@app.post("/api/move-to-trash")
+def move_to_trash(req: MoveToTrashRequest):
+    source_path = get_file_path(req.sourceFile)
+    trash_path = get_file_path('trash.tsv')
+    
+    item_to_trash = None
+    
+    # 1. ค้นหาและลบออกจากไฟล์ต้นฉบับ
+    if os.path.exists(source_path):
+        with open(source_path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+            
+        if lines:
+            header = lines[0]
+            new_lines = [header]
+            # กรองเอาเฉพาะบรรทัดที่ไม่ใช่ไฟล์ที่ต้องการลบ
+            for line in lines[1:]:
+                if not line.strip(): continue
+                parts = line.split('\t')
+                if parts[0] == req.filename:
+                    item_to_trash = line # เก็บข้อมูลไว้ก่อนลบ
+                else:
+                    new_lines.append(line)
+            
+            # บันทึกไฟล์ต้นฉบับใหม่ (ถ้าเจอตัวลบ)
+            if item_to_trash:
+                with open(source_path, "w", encoding="utf-8") as f:
+                    f.write("\n".join(new_lines) + "\n")
+    
+    if not item_to_trash:
+        # ถ้าหาไม่เจอ หรือไฟล์ต้นฉบับไม่มี
+        return {"status": "item not found or source file missing"}
+
+    # 2. เพิ่มลงใน trash.tsv
+    need_header = not os.path.exists(trash_path)
+    with open(trash_path, "a", encoding="utf-8") as f:
+        if need_header:
+            f.write("filename\ttext\n")
+        f.write(item_to_trash + "\n")
+        
+    return {"status": "moved to trash"}
 
 if __name__ == "__main__":
     import uvicorn
