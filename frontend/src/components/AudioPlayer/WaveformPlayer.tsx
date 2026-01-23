@@ -75,7 +75,8 @@ export const WaveformPlayer: React.FC<Props> = ({
     });
     
     ws.on('interaction', () => {
-        // เมื่อ user ลากกราฟ ไม่ต้องทำอะไรพิเศษ wavesurfer จัดการเอง
+      onPlayChangeRef.current?.(true); // สั่ง Parent ให้รู้ว่า "เล่นได้เลย"
+      // wavesurfer.current?.play(); // ตัว useEffect จะทำงานตาม state ที่เปลี่ยนไปเอง
     });
 
     // Cleanup
