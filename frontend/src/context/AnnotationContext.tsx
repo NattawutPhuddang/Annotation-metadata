@@ -65,6 +65,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [tokenCache, setTokenCache] = useState<Map<string, string[]>>(new Map());
   const [playingFile, setPlayingFile] = useState<string | null>(null);
   const [lastChangeMtime, setLastChangeMtime] = useState<number>(0);
+  const [trashData, setTrashData] = useState<AudioItem[]>([]);
 
   // --- Helper Methods ---
   const setLoading = (loading: boolean, msg = "") => {
@@ -118,10 +119,12 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // Load initial data
     Promise.all([
       audioService.loadTSV("Correct.tsv"), 
-      audioService.loadTSV("fail.tsv")
-    ]).then(([c, f]) => {
+      audioService.loadTSV("fail.tsv"),
+      audioService.loadTSV("trash.tsv")
+    ]).then(([c, f,t]) => {
       if (c.length) setCorrectData(c.reverse());
       if (f.length) setIncorrectData(f.reverse());
+      if (t && t.length) setTrashData(t);
     });
 
     // Sync Logic
@@ -235,7 +238,8 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // For simplicity, let's filter first
     const rawPending = audioFiles.filter(
       (i) => !correctData.some((c) => c.filename === i.filename) &&
-             !incorrectData.some((f) => f.filename === i.filename)
+             !incorrectData.some((f) => f.filename === i.filename)&&
+             !trashData.some((t) => t.filename === i.filename)
     );
     
     // Enrich Logic (Move here to avoid clutter in Component)
@@ -250,7 +254,7 @@ export const AnnotationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
          }
          return { ...i, audioPath: src };
     });
-  }, [audioFiles, correctData, incorrectData]);
+  }, [audioFiles, correctData, incorrectData,trashData]);
 
   // Create suggestions map from changes for O(1) lookup
   const suggestions = useMemo(() => {
