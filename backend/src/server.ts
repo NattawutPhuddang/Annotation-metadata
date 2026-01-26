@@ -16,6 +16,10 @@ const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 if (!fs.existsSync(BACKUP_DIR)) {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
 }
+const SAVES_DIR = path.join(DATA_DIR, 'saves');
+if (!fs.existsSync(SAVES_DIR)) {
+  fs.mkdirSync(SAVES_DIR, { recursive: true });
+}
 const CUSTOM_DICT_PATH = path.join(DATA_DIR, 'custom_dict.txt');
 
 // 🔒 MUTEX LOCK: กันข้อมูลชนกัน (Simple In-Memory Lock)
@@ -527,6 +531,56 @@ app.post('/api/move-to-trash', async (req, res) => {
     console.error('Move to trash error:', err);
     if (err.message.includes("Security")) return res.status(403).send(err.message);
     res.status(500).send('Error moving to trash');
+  }
+});
+
+app.post('/api/game/save', async (req, res) => {
+  const { userId, data } = req.body;
+  if (!userId || !data) return res.status(400).send('Missing userId or data');
+
+  try {
+    // Validate userId (ป้องกัน path traversal)
+    if (!/^[a-zA-Z0-9_-]+$/.test(userId)) {
+        return res.status(400).send('Invalid userId format');
+    }
+
+    const filePath = path.join(SAVES_DIR, `${userId}.json`);
+    
+    await acquireLock(filePath);
+    try {
+        await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+        res.send('Game Saved');
+    } finally {
+        releaseLock(filePath);
+    }
+  } catch (err) {
+    console.error("Game save error:", err);
+    res.status(500).send('Error saving game');
+  }
+});
+
+// 2. Load Game
+app.get('/api/game/load', async (req, res) => {
+  const userId = req.query.userId as string;
+  if (!userId) return res.status(400).send('Missing userId');
+
+  try {
+    if (!/^[a-zA-Z0-9_-]+$/.test(userId)) {
+        return res.status(400).send('Invalid userId format');
+    }
+
+    const filePath = path.join(SAVES_DIR, `${userId}.json`);
+    
+    try {
+        await fs.promises.access(filePath);
+        const content = await fs.promises.readFile(filePath, 'utf8');
+        res.json(JSON.parse(content));
+    } catch {
+        res.status(404).send('Save not found');
+    }
+  } catch (err) {
+    console.error("Game load error:", err);
+    res.status(500).send('Error loading game');
   }
 });
 
