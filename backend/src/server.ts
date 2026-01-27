@@ -321,22 +321,29 @@ app.post('/api/delete-tsv-entry', async (req, res) => {
   }
 });
 
-app.get(/^\/api\/audio\/(.*)$/, async (req, res) => {
-  const params = req.params as any;
-  const rawPath = params[0] || '';
-  const audioPath = decodeURIComponent(rawPath);
-  
+// ✅ แก้ไขส่วนรับไฟล์เสียงใน server.ts
+app.get('/api/audio', async (req, res) => {
   try {
-      // Security Check: ห้าม Audio ออกนอก DATA_DIR หรือโฟลเดอร์ที่กำหนด (ถ้า audio อยู่นอก data ต้องแก้ logic ตรงนี้)
-      // แต่เบื้องต้นเช็ค existence ก่อน
-      if (fs.existsSync(audioPath)) {
-          // ถ้าเป็นไปได้ควรเช็ค Path Traversal ตรงนี้ด้วยถ้า audioPath มาจาก user input
-          res.sendFile(audioPath); 
-      } else {
-          res.status(404).send('Not found');
-      }
-  } catch {
-      res.status(404).send('Not found');
+    const rawPath = req.query.path as string;
+    // รับ basePath เพิ่มมาจาก query string
+    const basePath = req.query.basePath as string; 
+
+    if (!rawPath) return res.status(400).send('Path is required');
+
+    const decodedPath = decodeURIComponent(rawPath);
+    
+    // ถ้ามี basePath ส่งมา ให้ใช้ค่านั้นเป็นตัวตั้งต้น ถ้าไม่มีให้ใช้ค่าว่าง
+    const finalPath = basePath 
+      ? path.join(decodeURIComponent(basePath), decodedPath)
+      : path.resolve(decodedPath);
+
+    console.log(`[Target Path]: ${finalPath}`);
+
+    await fs.promises.access(finalPath, fs.constants.R_OK);
+    res.sendFile(finalPath);
+  } catch (err) {
+    console.error(`[Audio Error]: ${err}`);
+    res.status(404).send('Audio file not found');
   }
 });
 
