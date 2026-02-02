@@ -11,6 +11,10 @@ services:
       - ./data:/app/data
     environment:
       - PYTHON_API_URL=http://python_nlp:5000 # บอก Node ว่า Python อยู่ไหน
+      - LARK_APP_ID=cli_a9f6e14d6f381ed2
+      - LARK_APP_SECRET=PoZAUcaQeypNSUIJBwUr7g8jMyohnp0C
+      - LARK_BASE_TOKEN=TZTmbSaLva5U9rs8uEnlaHzGgjd
+      - LARK_TABLE_ID=tblBEdpZE5OMDZgy
     depends_on:
       - python_nlp
 
