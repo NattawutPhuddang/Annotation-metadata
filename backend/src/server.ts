@@ -798,43 +798,34 @@ app.post('/api/announcement', async (req, res) => {
 // Endpoint สำหรับดึงข้อมูลเริ่มต้นทั้งหมดไป Cache ที่ Frontend
 app.get('/api/sync/initial-state', async (req, res) => {
   const userId = req.query.userId as string;
-  
   try {
-    const correctPath = path.join(DATA_DIR, 'Correct.tsv');
-    const failPath = path.join(DATA_DIR, 'fail.tsv');
-    const userLogPath = userId ? path.join(DATA_DIR, `${userId}-Correct.tsv`) : null;
-    const changePath = path.join(DATA_DIR, 'ListOfChange.tsv');
-
-    // Helper อ่านไฟล์ TSV เป็น JSON
     const readTsv = async (p: string) => {
         try {
             const content = await fs.promises.readFile(p, 'utf8');
-            return content.split('\n').slice(1)
-                .filter(l => l.trim())
-                .map(l => {
-                    const [f, t] = l.split('\t');
-                    return { filename: f, text: t };
+            return content.split('\n').slice(1).filter(l => l.trim()).map(l => {
+                    const [f, t] = l.split('\t'); return { filename: f, text: t };
                 });
         } catch { return []; }
     };
 
-    const [correct, fail, userLog, changes] = await Promise.all([
-        readTsv(correctPath),
-        readTsv(failPath),
-        userLogPath ? readTsv(userLogPath) : [],
-        readTsv(changePath) // อันนี้อาจต้องแปลง structure นิดหน่อย
+    // ✅ เพิ่มการอ่าน trash.tsv (บรรทัดสุดท้ายใน array)
+    const [correct, fail, userLog, changes, trash] = await Promise.all([
+        readTsv(path.join(DATA_DIR, 'Correct.tsv')),
+        readTsv(path.join(DATA_DIR, 'fail.tsv')),
+        userId ? readTsv(path.join(DATA_DIR, `${userId}-Correct.tsv`)) : [],
+        readTsv(path.join(DATA_DIR, 'ListOfChange.tsv')),
+        readTsv(path.join(DATA_DIR, 'trash.tsv')) // <--- เพิ่มตรงนี้
     ]);
 
-    res.json({
-        correct,
-        fail,
-        userLog,
-        changes: changes.map((c: any) => ({ original: c.filename, changed: c.text })) // map กลับให้ตรง type
+    // ✅ ส่ง trash กลับไปใน response
+    res.json({ 
+        correct, 
+        fail, 
+        userLog, 
+        changes: changes.map((c: any) => ({ original: c.filename, changed: c.text })),
+        trash // <--- เพิ่มตรงนี้
     });
-
-  } catch (err) {
-    res.status(500).json({ error: "Failed to fetch initial state" });
-  }
+  } catch { res.status(500).json({ error: "Failed to fetch" }); }
 });
 
 app.listen(PORT, () => {
