@@ -178,3 +178,9 @@ root/
 * **Backup Data:** ควร Backup โฟลเดอร์ `backend/data` ไปเก็บที่อื่นเป็นระยะ
 * **Update Pyodide:** หาก Pyodide ออกเวอร์ชันใหม่ ต้องอัปเดตทั้งไฟล์ใน `public/pyodide` และโค้ด init ใน Service
 * **Concurrent Users:** ระบบใช้ File Locking แบบง่าย (Mutex) รองรับผู้ใช้ได้ระดับหนึ่ง แต่ถ้าคนใช้เยอะมากพร้อมกัน อาจต้องเปลี่ยนไปใช้ Database จริง (SQLite/Postgres)
+
+
+
+### ปัญหา
+เมื่อมีการทำ OfflineMode บางครั้งจะทำให้ไฟล Correct เป็น Null วิธีการกู้คืนคือ ในแต่ละ User จะเก็บ Correct อยู่แล้ว เราจะทำการดึงตัวที่ไม่ซ้ำจากแต่ละ user เข้ามาแทน โดยใช้คำสั่งดังนี้
+awk '!seen[$0]++' Correct.tsv *-Correct.tsv > temp.tsv && mv temp.tsv Correct.tsv

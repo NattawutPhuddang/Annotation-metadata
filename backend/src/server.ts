@@ -103,7 +103,7 @@ const runBackup = async () => {
 };
 
 // สั่งให้ Backup ทำงานทุกๆ 1 นาที (60000 ms)
-setInterval(runBackup, 60 * 1000);
+setInterval(runBackup, 120 * 1000);
 // เรียกครั้งแรก (แบบ fire-and-forget ไม่ต้อง await)
 runBackup();
 
