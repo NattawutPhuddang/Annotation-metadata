@@ -50,8 +50,13 @@ npm install
 # สร้างโฟลเดอร์ data ถ้ายังไม่มี
 mkdir data 
 
+docker-compose up -d --build #Build เป็น Docker
+docker-compose logs -f api  #เอาไว้ดู Log
+
 # รัน Server (Development Mode)
 npm run dev
+
+
 
 ```
 
