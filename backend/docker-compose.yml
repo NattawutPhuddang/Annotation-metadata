@@ -10,7 +10,7 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - PYTHON_API_URL=http://python_nlp:5000 # บอก Node ว่า Python อยู่ไหน
+      - PYTHON_API_URL=http://python_nlp:5001 # บอก Node ว่า Python อยู่ไหน
       - LARK_APP_ID=cli_a9f6e14d6f381ed2
       - LARK_APP_SECRET=PoZAUcaQeypNSUIJBwUr7g8jMyohnp0C
       - LARK_BASE_TOKEN=TZTmbSaLva5U9rs8uEnlaHzGgjd
@@ -24,4 +24,4 @@ services:
       context: .
       dockerfile: Dockerfile.python # ใช้ Dockerfile.python ที่เพิ่งสร้าง
     ports:
-      - "5000:5000"
+      - "5001:5001"

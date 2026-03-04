@@ -11,4 +11,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # สั่งรัน Python Server ที่ Port 5000 (เพื่อไม่ให้ชนกับ Node 3003)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5001"]

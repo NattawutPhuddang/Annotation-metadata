@@ -340,4 +340,4 @@ def move_to_trash(req: MoveToTrashRequest):
 if __name__ == "__main__":
     import uvicorn
     # รันบน Port 5000 (ตรวจดู docker-compose ให้ map 5000:5000 ด้วย)
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5001)

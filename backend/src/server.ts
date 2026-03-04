@@ -128,7 +128,7 @@ const tokenizeText = async (text: string): Promise<string[]> => {
   if (!text) return [];
   
   try {
-    const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+    const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
     const response = await fetch(`${pythonUrl}/api/tokenize`, { 
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -319,7 +319,7 @@ app.post('/api/tokenize-batch', async (req, res) => {
     }
 
     try {
-      const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5000';
+      const pythonUrl = process.env.PYTHON_API_URL || 'http://localhost:5001';
       const response = await fetch(`${pythonUrl}/api/tokenize-batch`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
